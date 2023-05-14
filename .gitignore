@@ -1,0 +1,12 @@
+.vs/
+.vsconfig
+Assembly-CSharp.csproj
+UserSettings/
+Fluid Sim.sln
+obj/
+
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+Library/
