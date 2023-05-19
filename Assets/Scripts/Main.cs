@@ -11,6 +11,14 @@ public class Main : MonoBehaviour
     [SerializeField] private Mesh _instanceMesh;
     [SerializeField] private Material _instanceMaterial;
     public Camera cam;
+    [SerializeField] private GameObject airCellPrefab;
+    [SerializeField] private GameObject solidCellPrefab;
+    [SerializeField] private GameObject fluidCellPrefab;
+    private List<GameObject> gridCells = new List<GameObject>();
+    [SerializeField] bool showGrid;
+
+
+
 
     // Mesh Data for rendering particles uniqely - add colors etc later
     private struct Mesh_Data
@@ -32,6 +40,10 @@ public class Main : MonoBehaviour
     // Dimensions of the grid coords - aka there are _gridResX = (fNumX -1) cells in the x direction, and _gridResY cells in the y directrion (in 2D at least)
     private float _gridResX;
     private float _gridResY;
+    // CELL TYPES
+    private static float FLUID_CELL = 0;
+    private static float AIR_CELL = 1;
+    private static float SOLID_CELL = 2;
     // amount of grid cells in the MAC grid
     private int _numCells;
 
@@ -54,7 +66,6 @@ public class Main : MonoBehaviour
     private int _numParticles;
     // Instantiation arrays
     private float3[] _initParticlePositions;
-    private float3[] _initParticleVelocities;
     private Mesh_Data[] _initParticleMatricies;
     private float[] _initCellTypes;
     private float[] _initSolidCells;
@@ -70,20 +81,22 @@ public class Main : MonoBehaviour
     private int _render_particles;
     private int _integrate_particles;
     private int _enforce_boundaries;
+    private int _reset_cell_types;
+    private int _reset_cell_velocities_and_weights;
+    private int _mark_fluid_cells;
+
+
     // Particle Buffers
     private ComputeBuffer _particlePositionsBuffer; // particle positions
     private ComputeBuffer _particleVelocitiesBuffer; // particle velocities
     private ComputeBuffer _meshPropertiesBuffer; // particle properties (matrix, color, etc)
     private ComputeBuffer _cellTypeBuffer; // cell type, Fluid = 0, Air = 1, Solid = 2;
     private ComputeBuffer _cellIsSolidBuffer; // Fixed buffer - sets boundary cells to solid
+    private ComputeBuffer _cellVelocityBuffer;
+    private ComputeBuffer _prevCellVelocityBuffer;
+    private ComputeBuffer _cellWeightBuffer;
 
-    // Grid Buffers
-        // cell velocities
-        // cell prev velocities
-        // cell weights
-        // cell density
-        // cell pressure
-        // cell cell markers
+
 
     // Start is called before the first frame update
     void Start()
@@ -95,11 +108,13 @@ public class Main : MonoBehaviour
         // Grid stuff
         // Note, this is the number of actual cells, we will be appending 1 to each dimension for our staggered MAC grid
         float numGridCells = _simWidth * _simHeight * _gridCellDensity;
-        _gridResY = math.ceil(math.pow(numGridCells / 2.0f, 1.0f/_dim));
-        _gridResX = _gridResY * 2.0f;
+        //_gridResY = math.ceil(math.pow(numGridCells / 1.0f, 1.0f/_dim));
+        //_gridResX = _gridResY * 2.0f;
+        _gridResY = math.floor(_simHeight * _gridCellDensity);
+        _gridResX = math.floor(_simWidth * _gridCellDensity);
 
         // Particle stuff
-        _r = 7.0f / _gridResX;
+        _r = 0.3f * (_simWidth / _gridResX);
         _particleScale = new Vector3(2 * _r, 2 * _r, 2 * _r);
 
 
@@ -110,8 +125,13 @@ public class Main : MonoBehaviour
         float dy = math.sqrt(3.0f) / 2.0f * dx;
 
         // these are the dimenion versions of h in the 10 min phys vid.
-        float _x = _gridResX / _simWidth;
-        float _y = _gridResY / _simHeight;
+        float _x = _simWidth / _gridResX;
+        float _y = _simHeight / _gridResY;
+
+        Debug.Log(_gridResY);
+        Debug.Log(_gridResX);
+        Debug.Log(_x);
+        Debug.Log(_y);
 
         int numX = (int) math.floor((relativeWaterWidth * _simWidth - 2.0f * _x - 2.0f * _r) / dx);
         int numY = (int) math.floor((relativeWaterHeight * _simHeight - 2.0f * _y - 2.0f * _r) / dy);
@@ -122,7 +142,6 @@ public class Main : MonoBehaviour
 
         // instantiate init arrays
         _initParticlePositions = new float3[_numParticles];
-        _initParticleVelocities = new float3[_numParticles];
         _initParticleMatricies = new Mesh_Data[_numParticles];
         _initSolidCells = new float[_numCells];
         _initCellTypes = new float[_numCells];
@@ -154,6 +173,9 @@ public class Main : MonoBehaviour
         _integrate_particles = _compute.FindKernel("integrate_particles");
         _render_particles = _compute.FindKernel("render_particles");
         _enforce_boundaries = _compute.FindKernel("enforce_boundaries");
+        _reset_cell_types = _compute.FindKernel("reset_cell_types");
+        _reset_cell_velocities_and_weights = _compute.FindKernel("reset_cell_velocities_and_weights");
+        _mark_fluid_cells = _compute.FindKernel("mark_fluid_cells");
 
         // Create Buffers
         UpdateBuffers();
@@ -179,6 +201,15 @@ public class Main : MonoBehaviour
 
         _cellIsSolidBuffer?.Release();
         _cellIsSolidBuffer = null;
+
+        _cellVelocityBuffer?.Release();
+        _cellVelocityBuffer = null;
+
+        _cellWeightBuffer?.Release();
+        _cellWeightBuffer = null;
+
+        _prevCellVelocityBuffer?.Release();
+        _prevCellVelocityBuffer = null;
 }   
 
     private void setSolidCells()
@@ -188,11 +219,11 @@ public class Main : MonoBehaviour
             for (int j = 0; j < _gridResY + 1; j++)
             {
                 float s = 1.0f; // fluid
-                if (i == 0 || i == _gridResX || j == 0 )
+                if (i == 0 || i == _gridResX || j == 0 || j == _gridResY)
                 {
                     s = 0.0f;
                 }
-                _initSolidCells[i * (int)_gridResY + j] = s;
+                _initSolidCells[i * ((int)_gridResY + 1) + j] = s;
             }
         }
     }
@@ -203,7 +234,9 @@ public class Main : MonoBehaviour
 
         _particlePositionsBuffer = new ComputeBuffer(_numParticles, 12);
         _particlePositionsBuffer.SetData(_initParticlePositions);
+
         _particleVelocitiesBuffer = new ComputeBuffer(_numParticles, 12);
+
         _meshPropertiesBuffer = new ComputeBuffer(_numParticles, 64);
         _meshPropertiesBuffer.SetData(_initParticleMatricies);
 
@@ -211,6 +244,10 @@ public class Main : MonoBehaviour
         _cellIsSolidBuffer.SetData(_initSolidCells);
 
         _cellTypeBuffer = new ComputeBuffer(_numCells, 4);
+
+        _cellWeightBuffer = new ComputeBuffer(_numCells, 12);
+
+        _cellVelocityBuffer = new ComputeBuffer(_numCells, 12);
 
         // Set buffer for mesh properties to be shared by compute shader and instance renderer.
         _compute.SetBuffer(_render_particles, "meshProperties", _meshPropertiesBuffer) ;
@@ -225,14 +262,34 @@ public class Main : MonoBehaviour
         _compute.SetBuffer(_enforce_boundaries, "particlePositions", _particlePositionsBuffer);
         _compute.SetBuffer(_enforce_boundaries, "particleVelocities", _particleVelocitiesBuffer);
 
+        // Set for reset_cell_types
+        _compute.SetBuffer(_reset_cell_types, "cellTypes", _cellTypeBuffer);
+        _compute.SetBuffer(_reset_cell_types, "cellIsSolid", _cellIsSolidBuffer);
+
+        // Set for reset_cell_velocities_and_weights
+        _compute.SetBuffer(_reset_cell_velocities_and_weights, "cellVelocities", _cellVelocityBuffer);
+        _compute.SetBuffer(_reset_cell_velocities_and_weights, "cellWeights", _cellWeightBuffer);
+
+        // Set for mark_fluid_cells
+        _compute.SetBuffer(_mark_fluid_cells, "cellTypes", _cellTypeBuffer);
+        _compute.SetBuffer(_mark_fluid_cells, "particlePositions", _particlePositionsBuffer);
+
         // Set floats
         _compute.SetFloat("_gravity", _gravity);
         _compute.SetFloat("_timeStep", _dt);
+        _compute.SetFloat("_r", _r);
         _compute.SetFloat("_numSubSteps", _numSubSteps);
-        _compute.SetFloat("_minX", _gridResX / _simWidth + _r);
-        _compute.SetFloat("_maxX", _gridResX * (_gridResX / _simWidth) - _r);
-        _compute.SetFloat("_minY", _gridResY / _simHeight + _r);
-        _compute.SetFloat("_maxY", _gridResY * (_gridResY / _simHeight) - _r);
+        _compute.SetFloat("_width", _simWidth);
+        _compute.SetFloat("_height", _simHeight);
+        _compute.SetFloat("_resX", _gridResX);
+        _compute.SetFloat("_resY", _gridResY);
+        _compute.SetFloat("_minX", _simWidth / _gridResX + _r);
+        _compute.SetFloat("_maxX", _gridResX * (_simWidth / _gridResX) - 2 * _r);
+        _compute.SetFloat("_minY", _simHeight / _gridResY + _r);
+        _compute.SetFloat("_maxY", _gridResY * (_simHeight / _gridResY) - 2*_r);
+        _compute.SetFloat("FLUID_CELL", FLUID_CELL);
+        _compute.SetFloat("AIR_CELL", AIR_CELL);
+        _compute.SetFloat("SOLID_CELL", SOLID_CELL);
 
 
         // Verts
@@ -257,6 +314,43 @@ public class Main : MonoBehaviour
         // Integrate particles
         _compute.Dispatch(_integrate_particles, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
         _compute.Dispatch(_enforce_boundaries, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        _compute.Dispatch(_reset_cell_types, Mathf.CeilToInt(_numCells / 64f), 1, 1);
+        _compute.Dispatch(_reset_cell_velocities_and_weights, Mathf.CeilToInt(_numCells / 64f), 1, 1);
+        _compute.Dispatch(_mark_fluid_cells, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+
+        if (showGrid)
+        {
+            for (int i = 0; i < gridCells.Count; i++)
+            {
+                DestroyImmediate(gridCells[i]);
+            }
+            gridCells.Clear();
+
+            float[] cellTypes = new float[_numCells];
+            
+            _cellTypeBuffer.GetData(cellTypes);
+
+            for (int i = 0; i <= _gridResX; i++)
+            {
+                for (int j = 0; j <= _gridResY; j++)
+                {
+
+                    //if (cellTypes[i * ((int)_gridResY + 1) + j] == AIR_CELL)
+                    //{
+                    //    gridCells.Add(Instantiate(airCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * i, _simHeight / (_gridResY + 1) * j , 0), Quaternion.identity));
+                    //} else if (cellTypes[i * ((int)_gridResY + 1) + j] == SOLID_CELL)
+                    //{
+                    //    gridCells.Add(Instantiate(solidCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * i, _simHeight / (_gridResY + 1) * j, 0), Quaternion.identity));
+                    //}
+                    if (cellTypes[i * ((int)_gridResY + 1) + j] == FLUID_CELL)
+                    {
+                        gridCells.Add(Instantiate(fluidCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * (i + .5f), _simHeight / (_gridResY + 1) * (j + .5f), 0), Quaternion.identity));
+                    }
+
+                }
+            }
+        }
+
         Graphics.DrawMeshInstancedIndirect(_instanceMesh, 0, _instanceMaterial, new Bounds(Vector3.zero, Vector3.one * 1000), _argsBuffer);
 
     }

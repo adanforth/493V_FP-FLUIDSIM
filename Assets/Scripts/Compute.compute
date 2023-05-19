@@ -4,6 +4,12 @@
 
 #pragma kernel enforce_boundaries;
 
+#pragma kernel reset_cell_types;
+
+#pragma kernel reset_cell_velocities_and_weights;
+
+#pragma kernel mark_fluid_cells;
+
 //#include <UnityShaderVariables.cginc>
 
 struct mesh_data
@@ -23,13 +29,20 @@ float _timeStep;
 float _numSubSteps;
 
 // Grid Stuff
-RWStructuredBuffer<float3> cellTypes;
+RWStructuredBuffer<float> cellTypes;
 StructuredBuffer<float> cellIsSolid;
+RWStructuredBuffer<float3> cellWeights;
+RWStructuredBuffer<float3> cellVelocities;
+RWStructuredBuffer<float3> prevCellVelocities;
 float _width;
 float _height;
 float _resX;
 float _resY;
 
+// cell states
+float FLUID_CELL;
+float AIR_CELL;
+float SOLID_CELL;
 
 // for boundaries
 float _minX;
@@ -62,8 +75,8 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 {
     float4x4 mat = meshProperties[id.x].mat;
 
-    mat[0][3] = particlePositions[id.x].x;
-    mat[1][3] = particlePositions[id.x].y;
+    mat[0][3] = particlePositions[id.x].x - _r;
+    mat[1][3] = particlePositions[id.x].y - _r ;
 
     meshProperties[id.x].mat = mat;
 }
@@ -71,7 +84,9 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void integrate_particles(uint3 id : SV_DispatchThreadID) 
 {
-    particleVelocities[id.x].y += _timeStep * _gravity;
+    //particleVelocities[id.x].y += _timeStep * _gravity;
+    particleVelocities[id.x].y += _timeStep * 3 * (2 * RandomFloat(id.x) - 1);
+    particleVelocities[id.x].x += _timeStep * 3 * (2 * RandomFloat(id.x) - 1);
     particlePositions[id.x].x += particleVelocities[id.x].x * _timeStep;
     particlePositions[id.x].y += particleVelocities[id.x].y * _timeStep;
 }
@@ -92,12 +107,12 @@ void enforce_boundaries(uint3 id : SV_DispatchThreadID)
         particlePositions[id.x].x = _maxX;
         particleVelocities[id.x].x = 0.0;
     }
-    if (y < _minX)
+    if (y < _minY)
     {
         particlePositions[id.x].y = _minY;
         particleVelocities[id.x].y = 0.0;
     }
-    if (y > _maxX)
+    if (y > _maxY)
     {
         particlePositions[id.x].y = _maxY;
         particleVelocities[id.x].y = 0.0;
@@ -107,28 +122,61 @@ void enforce_boundaries(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void reset_cell_types(uint3 id : SV_DispatchThreadID)
 {
-    // given some point...
-    
-    // find cell that contains the point...
-    
-    // find delta x and delta y...
-    
-    // 
-    
+    cellTypes[id.x] = cellIsSolid[id.x] == 0.0 ? SOLID_CELL : AIR_CELL;
 }
+
+[numthreads(64, 1, 1)]
+void reset_cell_velocities_and_weights(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x] = float3(0.0, 0.0, 0.0);
+    cellWeights[id.x] = float3(0.0, 0.0, 0.0);
+}
+
+[numthreads(64, 1, 1)]
+void mark_fluid_cells(uint3 id : SV_DispatchThreadID)
+{
+    int n = _resY + 1;
+    float h = _height / _resY;
+    float h1 = 1.0 / h;
+    float h2 = 0.5 * h;
+    
+    float x_p = particlePositions[id.x].x;
+    float y_p = particlePositions[id.x].y;
+    
+    int x_i = (int)  clamp(floor(x_p * h1), 0.0, _resX);
+    int y_i = (int)  clamp(floor(y_p * h1), 0.0, _resY);
+
+    int cell_nr = (int) x_i * n + y_i;
+    if (cellTypes[ cell_nr] == AIR_CELL)
+    {
+        cellTypes[cell_nr] = FLUID_CELL;
+    }
+}
+
 
 
 [numthreads(64, 1, 1)]
 void particle_to_grid(uint3 id : SV_DispatchThreadID)
 {
     // given some point...
+    // Used for both  u and v
+    int n = _resY + 1;
+    float h = _height / _resY;
+    float h1 = 1.0 / h;
+    float h2 = 0.5 * h;
     
+    // Set velocities and weights to 0.
+    
+    
+    
+    // For the u component...   
     // find cell that contains the point...
+    
+    
     
     // find delta x and delta y...
     
     // 
-    
 }
 
 [numthreads(64, 1, 1)]
@@ -137,6 +185,7 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
     // for some point...
 
     // for u component...
+    //float dx = 
     
     // find the cell coords...
     float x_p = particlePositions[id.x].x;
