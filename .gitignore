@@ -8,5 +8,6 @@ obj/
 *.pidb.meta
 *.pdb.meta
 *.mdb.meta
+Temp/
 
 Library/

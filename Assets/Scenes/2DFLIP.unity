@@ -152,10 +152,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f5916df543c86b429b6a3dd1eca3b6d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _instanceMesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+  _instanceMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   _instanceMaterial: {fileID: 2100000, guid: 59db67341b3a7fe428f095403620f80d, type: 2}
+  cam: {fileID: 963194227}
   _compute: {fileID: 7200000, guid: e10385ef8d17c764783affc05aa4f229, type: 3}
-  _numParticles: 100000
+  _simWidth: 40
+  _simHeight: 20
+  res: 100
 --- !u!4 &19100044
 Transform:
   m_ObjectHideFlags: 0
