@@ -160,8 +160,8 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 8210444231714497919, guid: fad392af1a2f1df49bc2abbbabe404c9, type: 3}
   showGrid: 0
   _gridCellDensity: 1
-  _simWidth: 40
-  _simHeight: 20
+  _simWidth: 60
+  _simHeight: 30
   _compute: {fileID: 7200000, guid: e10385ef8d17c764783affc05aa4f229, type: 3}
 --- !u!4 &19100044
 Transform:

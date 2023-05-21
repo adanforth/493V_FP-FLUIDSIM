@@ -10,9 +10,15 @@
 
 #pragma kernel mark_fluid_cells;
 
+#pragma kernel copy_prev_velocities;
+
 #pragma kernel particle_to_grid;
 
+#pragma kernel convert_velocity_and_weight_to_float;
+
 #pragma kernel avg_cell_velocities;
+
+#pragma kernel restore_solid_cells;
 
 #pragma kernel reset_particle_densities;
 
@@ -44,12 +50,20 @@ float _numSubSteps;
 // Grid Stuff
 RWStructuredBuffer<float> cellTypes;
 StructuredBuffer<float> cellIsSolid;
-RWStructuredBuffer<int3> cellWeights;
-RWStructuredBuffer<int3> cellVelocities;
-RWStructuredBuffer<int> particleDensity;
+RWStructuredBuffer<float3> cellWeights;
+RWStructuredBuffer<float3> cellVelocities;
 RWStructuredBuffer<float3> prevCellVelocities;
+RWStructuredBuffer<int3> cellWeightsInt;
+RWStructuredBuffer<int3> cellVelocitiesInt;
+RWStructuredBuffer<int> particleDensity;
 float _width;
 float _height;
+
+float _h;
+float _fInvSpacing;
+int _fNumX;
+int _fNumY;
+
 float _resX;
 float _resY;
 float _particleRestDensity;
@@ -91,7 +105,7 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 {
     float4x4 mat = meshProperties[id.x].mat;
 
-    mat[0][3] = particlePositions[id.x].x - _r;
+    mat[0][3] = particlePositions[id.x].x - _r ;
     mat[1][3] = particlePositions[id.x].y - _r ;
 
     meshProperties[id.x].mat = mat;
@@ -137,10 +151,18 @@ void enforce_boundaries(uint3 id : SV_DispatchThreadID)
 
 
 [numthreads(64, 1, 1)]
+void copy_prev_velocities(uint3 id : SV_DispatchThreadID)
+{
+    prevCellVelocities[id.x] = cellVelocities[id.x];
+}
+
+[numthreads(64, 1, 1)]
 void reset_cell_velocities_and_weights(uint3 id : SV_DispatchThreadID)
 {
-    cellVelocities[id.x] = int3(0.0, 0.0, 0.0);
-    cellWeights[id.x] = int3(0.0, 0.0, 0.0);
+    cellVelocities[id.x] = float3(0.0, 0.0, 0.0);
+    cellWeights[id.x] = float3(0.0, 0.0, 0.0);
+    cellVelocitiesInt[id.x] = int3(0.0, 0.0, 0.0);
+    cellWeightsInt[id.x] = int3(0.0, 0.0, 0.0);
 }
 
 [numthreads(64, 1, 1)]
@@ -152,19 +174,14 @@ void reset_cell_types(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void mark_fluid_cells(uint3 id : SV_DispatchThreadID)
 {
-    int n = _resY + 1;
-    float h = _height / _resY;
-    float h1 = 1.0 / h;
-    float h2 = 0.5 * h;
-    
     float x_p = particlePositions[id.x].x;
     float y_p = particlePositions[id.x].y;
     
-    int x_i = (int)  clamp(floor(x_p * h1), 0.0, _resX);
-    int y_i = (int)  clamp(floor(y_p * h1), 0.0, _resY);
+    int x_i = (int) clamp(floor(x_p * _fInvSpacing), 0.0, _fNumX - 1);
+    int y_i = (int) clamp(floor(y_p * _fInvSpacing), 0.0, _fNumY - 1);
 
-    int cell_nr = (int) x_i * n + y_i;
-    if (cellTypes[ cell_nr] == AIR_CELL)
+    int cell_nr = (int) (x_i * _fNumY) + y_i;
+    if (cellTypes[cell_nr] == AIR_CELL)
     {
         cellTypes[cell_nr] = FLUID_CELL;
     }
@@ -173,18 +190,12 @@ void mark_fluid_cells(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void particle_to_grid(uint3 id : SV_DispatchThreadID)
 {
-    // Used for both  u and v
-    int n = _resY + 1;
-    float h = _height / _resY;
-    float h1 = 1.0 / h;
-    float h2 = 0.5 * h;
-    
     // given some point...
     float x_p = particlePositions[id.x].x;
     float y_p = particlePositions[id.x].y;
     
-    x_p = clamp(x_p, h, _resX * h);
-    y_p = clamp(y_p, h, _resY * h);
+    x_p = clamp(x_p, _h, (_fNumX - 1) * _h);
+    y_p = clamp(y_p, _h, (_fNumY - 1) * _h);
     
 
     // Set velocities and weights to 0.
@@ -192,16 +203,16 @@ void particle_to_grid(uint3 id : SV_DispatchThreadID)
     
     // For the u component...   
     float dx = 0.0;
-    float dy = h2;
+    float dy = 0.5 * _h;
     
     
-    int x0 = (int) min(floor((x_p - dx) * h1), _resX - 1.0 );
-    float tx = ((x_p - dx) - x0 * h) * h1;
-    int x1 = (int) min(x0 + 1.0, _resX - 1.0);
+    int x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2 );
+    float tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    int x1 = (int) min(x0 + 1.0, _fNumX - 2);
     
-    int y0 = (int) min(floor((y_p - dy) * h1), _resY - 1.0);
-    float ty = ((y_p - dy) - y0 * h) * h1;
-    int y1 = (int) min(y0 + 1.0, _resY - 1.0);
+    int y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    float ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    int y1 = (int) min(y0 + 1.0, _fNumY - 2);
     
     float sx = 1.0 - tx;
     float sy = 1.0 - ty;
@@ -211,36 +222,36 @@ void particle_to_grid(uint3 id : SV_DispatchThreadID)
     float d2 = tx * ty;
     float d3 = sx * ty;
     
-    int nr0 = x0 * n + y0;
-    int nr1 = x1 * n + y0;
-    int nr2 = x1 * n + y1;
-    int nr3 = x0 * n + y1;
+    int nr0 = x0 * _fNumY + y0;
+    int nr1 = x1 * _fNumY + y0;
+    int nr2 = x1 * _fNumY + y1;
+    int nr3 = x0 * _fNumY + y1;
     
     float pv = particleVelocities[id.x].x;
-    int pv_int = (int)  pv * 10000.0;
+    int pv_int = (int) (pv * 1000000.0f);
     
     // Add to grid
-    InterlockedAdd(cellVelocities[nr0].x, (int) (pv_int * d0 * 10000.0));
-    InterlockedAdd(cellVelocities[nr1].x, (int) (pv_int * d1 * 10000.0));
-    InterlockedAdd(cellVelocities[nr2].x, (int) (pv_int * d2 * 10000.0));
-    InterlockedAdd(cellVelocities[nr3].x, (int) (pv_int * d3 * 10000.0));
-    
-    InterlockedAdd(cellWeights[nr0].x, (int) (d0 * 10000.0));
-    InterlockedAdd(cellWeights[nr1].x, (int) (d1 * 10000.0));
-    InterlockedAdd(cellWeights[nr2].x, (int) (d2 * 10000.0));
-    InterlockedAdd(cellWeights[nr3].x, (int) (d3 * 10000.0));
+    InterlockedAdd(cellVelocitiesInt[nr0].x, (int) (pv_int * d0));
+    InterlockedAdd(cellVelocitiesInt[nr1].x, (int) (pv_int * d1));
+    InterlockedAdd(cellVelocitiesInt[nr2].x, (int) (pv_int * d2));
+    InterlockedAdd(cellVelocitiesInt[nr3].x, (int) (pv_int * d3));
+  
+    InterlockedAdd(cellWeightsInt[nr0].x, (int) (d0 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr1].x, (int) (d1 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr2].x, (int) (d2 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr3].x, (int) (d3 * 1000000.0f));
     
     // For the v component
-    dx = h2;
+    dx = 0.5 * _h;
     dy = 0.0;
     
-    x0 = (int) min(floor((x_p - dx) * h1), _resX - 1.0);
-    tx = ((x_p - dx) - x0 * h) * h1;
-    x1 = (int) min(x0 + 1.0, _resX - 1.0);
+    x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    x1 = (int) min(x0 + 1.0, _fNumX - 2);
     
-    y0 = (int) min(floor((y_p - dy) * h1), _resY - 1.0);
-    ty = ((y_p - dy) - y0 * h) * h1;
-    y1 = (int) min(y0 + 1.0, _resY - 1.0);
+    y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    y1 = (int) min(y0 + 1.0, _fNumY - 2);
     
     sx = 1.0 - tx;
     sy = 1.0 - ty;
@@ -250,40 +261,63 @@ void particle_to_grid(uint3 id : SV_DispatchThreadID)
     d2 = tx * ty;
     d3 = sx * ty;
     
-    nr0 = x0 * n + y0;
-    nr1 = x1 * n + y0;
-    nr2 = x1 * n + y1;
-    nr3 = x0 * n + y1;
+    nr0 = x0 * _fNumY + y0;
+    nr1 = x1 * _fNumY + y0;
+    nr2 = x1 * _fNumY + y1;
+    nr3 = x0 * _fNumY + y1;
     
     pv = particleVelocities[id.x].y;
-    pv_int = (int) pv * 10000.0;
+    pv_int = (int) (pv * 1000000.0f);
 
         
     // Add to grid
-    InterlockedAdd(cellVelocities[nr0].y, (int) (pv_int * d0 * 10000.0));
-    InterlockedAdd(cellVelocities[nr1].y, (int) (pv_int * d1 * 10000.0));
-    InterlockedAdd(cellVelocities[nr2].y, (int) (pv_int * d2 * 10000.0));
-    InterlockedAdd(cellVelocities[nr3].y, (int) (pv_int * d3 * 10000.0));
+    InterlockedAdd(cellVelocitiesInt[nr0].y, (int) (pv_int * d0));
+    InterlockedAdd(cellVelocitiesInt[nr1].y, (int) (pv_int * d1));
+    InterlockedAdd(cellVelocitiesInt[nr2].y, (int) (pv_int * d2));
+    InterlockedAdd(cellVelocitiesInt[nr3].y, (int) (pv_int * d3));
     
-    InterlockedAdd(cellWeights[nr0].y, (int) (d0 * 10000.0));
-    InterlockedAdd(cellWeights[nr1].y, (int) (d1 * 10000.0));
-    InterlockedAdd(cellWeights[nr2].y, (int) (d2 * 10000.0));
-    InterlockedAdd(cellWeights[nr3].y, (int) (d3 * 10000.0));
+    InterlockedAdd(cellWeightsInt[nr0].y, (int) (d0 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr1].y, (int) (d1 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr2].y, (int) (d2 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr3].y, (int) (d3 * 1000000.0f));
+}
+
+[numthreads(64, 1, 1)]
+void convert_velocity_and_weight_to_float(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x].x = ((float) cellVelocitiesInt[id.x].x) / 1000000.0f;
+    cellVelocities[id.x].y = ((float) cellVelocitiesInt[id.x].y) / 1000000.0f;
+
+    cellWeights[id.x].x = ((float) cellWeightsInt[id.x].x) / 1000000.0f;
+    cellWeights[id.x].y = ((float) cellWeightsInt[id.x].y) / 1000000.0f;
 }
 
 
 [numthreads(64, 1, 1)]
 void avg_cell_velocities(uint3 id : SV_DispatchThreadID)
 {
-    if (cellWeights[id.x].x > 0)
+    if (cellWeights[id.x].x > 0.0001)
     {
-        cellVelocities[id.x].x /= cellWeights[id.x].x;
+        cellVelocities[id.x].x = cellVelocities[id.x].x  / cellWeights[id.x].x;
     }
-    if (cellWeights[id.x].y > 0)
+    if (cellWeights[id.x].y > 0.0001)
     {
-        cellVelocities[id.x].y /= cellWeights[id.x].y;
+        cellVelocities[id.x].y = cellVelocities[id.x].y / cellWeights[id.x].y;
     }
+}
 
+[numthreads(64, 1, 1)]
+void restore_solid_cells(uint3 id : SV_DispatchThreadID)
+{
+    bool solid = cellTypes[id.x] == SOLID_CELL;
+    if (solid || (id.x > _fNumY && cellTypes[id.x - _fNumX] == SOLID_CELL))
+    {
+        cellVelocities[id.x].x = prevCellVelocities[id.x].x;
+    }
+    if (solid || (id.x % _fNumY > 0 && cellTypes[id.x - 1] == SOLID_CELL))
+    {
+        cellVelocities[id.x].y = prevCellVelocities[id.x].y;
+    }
 }
 
 [numthreads(64, 1, 1)]
@@ -345,60 +379,60 @@ void update_particle_densities(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
 {
-    int n = _resY + 1;
-    float h = _height / _resY;
-    float h1 = 1.0 / h;
-    float h2 = 0.5 * h;
+    //int n = _resY + 1;
+    //float h = _height / _resY;
+    //float h1 = 1.0 / h;
+    //float h2 = 0.5 * h;
     
-    float x_p = particlePositions[id.x].x;
-    float y_p = particlePositions[id.x].y;
+    //float x_p = particlePositions[id.x].x;
+    //float y_p = particlePositions[id.x].y;
     
-    int x_i = (int) clamp(floor(x_p * h1), 0.0, _resX);
-    int y_i = (int) clamp(floor(y_p * h1), 0.0, _resY);
+    //int x_i = (int) clamp(floor(x_p * h1), 0.0, _resX);
+    //int y_i = (int) clamp(floor(y_p * h1), 0.0, _resY);
 
-    int cell_nr = (int) x_i * n + y_i;
+    //int cell_nr = (int) x_i * n + y_i;
     
-    if (cellTypes[cell_nr] == FLUID_CELL)
-    {
-        int left_cell_nr = cell_nr - n;
-        int right_cell_nr = cell_nr + n;
-        int bottom_cell_nr = cell_nr - 1;
-        int top_cell_nr = cell_nr + 1;
+    //if (cellTypes[cell_nr] == FLUID_CELL)
+    //{
+    //    int left_cell_nr = cell_nr - n;
+    //    int right_cell_nr = cell_nr + n;
+    //    int bottom_cell_nr = cell_nr - 1;
+    //    int top_cell_nr = cell_nr + 1;
         
-        int sx0 = cellIsSolid[left_cell_nr];
-        int sx1 = cellIsSolid[right_cell_nr];
-        int sy0 = cellIsSolid[bottom_cell_nr];
-        int sy1 = cellIsSolid[top_cell_nr];
+    //    int sx0 = cellIsSolid[left_cell_nr];
+    //    int sx1 = cellIsSolid[right_cell_nr];
+    //    int sy0 = cellIsSolid[bottom_cell_nr];
+    //    int sy1 = cellIsSolid[top_cell_nr];
 
-        int s = sx0 + sx1 + sy0 + sy1;
+    //    int s = sx0 + sx1 + sy0 + sy1;
         
-        if (s != 0.0)
-        {
-            float div = particleVelocities[right_cell_nr].x -
-                        particleVelocities[cell_nr].x +
-                        particleVelocities[top_cell_nr].y -
-                        particleVelocities[cell_nr].y;
+    //    if (s != 0.0)
+    //    {
+    //        float div = particleVelocities[right_cell_nr].x -
+    //                    particleVelocities[cell_nr].x +
+    //                    particleVelocities[top_cell_nr].y -
+    //                    particleVelocities[cell_nr].y;
             
-            if (_particleRestDensity > 0)
-            {
-                float k = 1.0;
-                float compression = ((float) particleDensity[cell_nr]) / 10000.0 - _particleRestDensity;
-                if (compression > 0.0)
-                {
-                    div = div - k * compression;
-                }
-            }
+    //        if (_particleRestDensity > 0)
+    //        {
+    //            float k = 1.0;
+    //            float compression = ((float) particleDensity[cell_nr]) / 10000.0 - _particleRestDensity;
+    //            if (compression > 0.0)
+    //            {
+    //                div = div - k * compression;
+    //            }
+    //        }
             
-            float p = -1.0 * div / s;
-            p *= _overrelaxation;
+    //        float p = -1.0 * div / s;
+    //        p *= _overrelaxation;
 
-            InterlockedAdd(cellVelocities[cell_nr].x, -1 * (int) (10000.0 * sx0 * p));
-            InterlockedAdd(cellVelocities[right_cell_nr].x, (int) (10000.0 * sx1 * p));
-            InterlockedAdd(cellVelocities[cell_nr].y, -1 * (int) (10000.0 * sy0 * p));
-            InterlockedAdd(cellVelocities[top_cell_nr].y, (int) (10000.0 * sy1 * p));
+    //        InterlockedAdd(cellVelocities[cell_nr].x, -1 * (int) (10000.0f * sx0 * p));
+    //        InterlockedAdd(cellVelocities[right_cell_nr].x, (int) (10000.0f * sx1 * p));
+    //        InterlockedAdd(cellVelocities[cell_nr].y, -1 * (int) (10000.0f * sy0 * p));
+    //        InterlockedAdd(cellVelocities[top_cell_nr].y, (int) (10000.0f * sy1 * p));
             
-        }
-    }
+    //    }
+    //}
 
 }
 
@@ -406,18 +440,12 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void grid_to_particle(uint3 id : SV_DispatchThreadID)
 {
-    // Used for both  u and v
-    int n = _resY + 1;
-    float h = _height / _resY;
-    float h1 = 1.0 / h;
-    float h2 = 0.5 * h;
-    
     // given some point...
     float x_p = particlePositions[id.x].x;
     float y_p = particlePositions[id.x].y;
     
-    x_p = clamp(x_p, h, _resX * h);
-    y_p = clamp(y_p, h, _resY * h);
+    x_p = clamp(x_p, _h, (_fNumX - 1) * _h);
+    y_p = clamp(y_p, _h, (_fNumY - 1) * _h);
     
 
     // Set velocities and weights to 0.
@@ -425,16 +453,16 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
     
     // For the u component...   
     float dx = 0.0;
-    float dy = h2;
+    float dy = 0.5 * _h;
     
     
-    int x0 = (int) min(floor((x_p - dx) * h1), _resX - 1.0);
-    float tx = ((x_p - dx) - x0 * h) * h1;
-    int x1 = (int) min(x0 + 1.0, _resX - 1.0);
+    int x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    float tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    int x1 = (int) min(x0 + 1.0, _fNumX - 2);
     
-    int y0 = (int) min(floor((y_p - dy) * h1), _resY - 1.0);
-    float ty = ((y_p - dy) - y0 * h) * h1;
-    int y1 = (int) min(y0 + 1.0, _resY - 1.0);
+    int y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    float ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    int y1 = (int) min(y0 + 1.0, _fNumY - 2);
     
     float sx = 1.0 - tx;
     float sy = 1.0 - ty;
@@ -444,41 +472,40 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
     float d2 = tx * ty;
     float d3 = sx * ty;
     
-    int nr0 = x0 * n + y0;
-    int nr1 = x1 * n + y0;
-    int nr2 = x1 * n + y1;
-    int nr3 = x0 * n + y1;
+    int nr0 = x0 * _fNumY + y0;
+    int nr1 = x1 * _fNumY + y0;
+    int nr2 = x1 * _fNumY + y1;
+    int nr3 = x0 * _fNumY + y1;
     
-    int valid0 = (cellTypes[nr0] != AIR_CELL || cellTypes[nr0 - n] != AIR_CELL) ? 1.0 : 0.0;
-    int valid1 = (cellTypes[nr1] != AIR_CELL || cellTypes[nr1 - n] != AIR_CELL) ? 1.0 : 0.0;
-    int valid2 = (cellTypes[nr2] != AIR_CELL || cellTypes[nr2 - n] != AIR_CELL) ? 1.0 : 0.0;
-    int valid3 = (cellTypes[nr3] != AIR_CELL || cellTypes[nr3 - n] != AIR_CELL) ? 1.0 : 0.0;
+    int valid0 = (cellTypes[nr0] != AIR_CELL || cellTypes[nr0 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid1 = (cellTypes[nr1] != AIR_CELL || cellTypes[nr1 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid2 = (cellTypes[nr2] != AIR_CELL || cellTypes[nr2 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid3 = (cellTypes[nr3] != AIR_CELL || cellTypes[nr3 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
     
     float v = particleVelocities[id.x].x;
     float d = valid0 * d0 + valid1 * d1 + valid2 * d2 + valid3 * d3;
     
     if (d > 0.0)
     {
-        float picU = (valid0 * d0 * (((float) cellVelocities[nr0].x) / 10000.0)) + 
-                     (valid1 * d1 * (((float) cellVelocities[nr1].x) / 10000.0)) +
-                     (valid2 * d2 * (((float) cellVelocities[nr2].x) / 10000.0)) +
-                     (valid3 * d3 * (((float) cellVelocities[nr3].x) / 10000.0));
+        float picU = (valid0 * d0 * cellVelocities[nr0].x) +
+                     (valid1 * d1 * cellVelocities[nr1].x) +
+                     (valid2 * d2 * cellVelocities[nr2].x) +
+                     (valid3 * d3 * cellVelocities[nr3].x);
         picU /= d;
         particleVelocities[id.x].x = picU;
     }
     
     // For the v component...   
-    dx = h2;
+    dx = 0.5 * _h;
     dy = 0.0;
     
+    x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    x1 = (int) min(x0 + 1.0, _fNumX - 2);
     
-    x0 = (int) min(floor((x_p - dx) * h1), _resX - 1.0);
-    tx = ((x_p - dx) - x0 * h) * h1;
-    x1 = (int) min(x0 + 1.0, _resX - 1.0);
-    
-    y0 = (int) min(floor((y_p - dy) * h1), _resY - 1.0);
-    ty = ((y_p - dy) - y0 * h) * h1;
-    y1 = (int) min(y0 + 1.0, _resY - 1.0);
+    y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    y1 = (int) min(y0 + 1.0, _fNumY - 2);
     
     sx = 1.0 - tx;
     sy = 1.0 - ty;
@@ -488,10 +515,10 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
     d2 = tx * ty;
     d3 = sx * ty;
     
-    nr0 = x0 * n + y0;
-    nr1 = x1 * n + y0;
-    nr2 = x1 * n + y1;
-    nr3 = x0 * n + y1;
+    nr0 = x0 * _fNumY + y0;
+    nr1 = x1 * _fNumY + y0;
+    nr2 = x1 * _fNumY + y1;
+    nr3 = x0 * _fNumY + y1;
     
     valid0 = (cellTypes[nr0] != AIR_CELL || cellTypes[nr0 - 1] != AIR_CELL) ? 1.0 : 0.0;
     valid1 = (cellTypes[nr1] != AIR_CELL || cellTypes[nr1 - 1] != AIR_CELL) ? 1.0 : 0.0;
@@ -503,10 +530,10 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
     
     if (d > 0.0)
     {
-        float picV = (valid0 * d0 * (((float) cellVelocities[nr0].y) / 10000.0)) +
-                     (valid1 * d1 * (((float) cellVelocities[nr1].y) / 10000.0)) +
-                     (valid2 * d2 * (((float) cellVelocities[nr2].y) / 10000.0)) +
-                     (valid3 * d3 * (((float) cellVelocities[nr3].y) / 10000.0));
+        float picV = (valid0 * d0 * cellVelocities[nr0].y) +
+                     (valid1 * d1 * cellVelocities[nr1].y) +
+                     (valid2 * d2 * cellVelocities[nr2].y) +
+                     (valid3 * d3 * cellVelocities[nr3].y);
         picV /= d;
         particleVelocities[id.x].y = picV;
     }
