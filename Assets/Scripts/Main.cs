@@ -27,7 +27,7 @@ public class Main : MonoBehaviour
     };
 
     // GLOBAL PARAMETERS
-    private static float _dt = 1.0f / 160.0f;
+    //private static float _dt = 1.0f / 160.0f;
     private static float _gravity = -9.81f;
     private static float density = 1000f; // For divergence calcs
     private static int _dim = 2;
@@ -84,6 +84,13 @@ public class Main : MonoBehaviour
     private int _reset_cell_types;
     private int _reset_cell_velocities_and_weights;
     private int _mark_fluid_cells;
+    private int _particle_to_grid;
+    private int _avg_cell_velocities;
+    private int _reset_particle_densities;
+    private int _update_particle_densities;
+    private int _solve_Incompressibility;
+    private int _grid_to_particle;
+
 
 
     // Particle Buffers
@@ -95,6 +102,7 @@ public class Main : MonoBehaviour
     private ComputeBuffer _cellVelocityBuffer;
     private ComputeBuffer _prevCellVelocityBuffer;
     private ComputeBuffer _cellWeightBuffer;
+    private ComputeBuffer _particleDensityBuffer;
 
 
 
@@ -137,6 +145,8 @@ public class Main : MonoBehaviour
         int numY = (int) math.floor((relativeWaterHeight * _simHeight - 2.0f * _y - 2.0f * _r) / dy);
         _numParticles = numX * numY;
 
+        //Debug.Log(_numParticles);
+
         _numCells = ((int)_gridResX + 1) * ((int)_gridResY + 1);
 
 
@@ -176,6 +186,12 @@ public class Main : MonoBehaviour
         _reset_cell_types = _compute.FindKernel("reset_cell_types");
         _reset_cell_velocities_and_weights = _compute.FindKernel("reset_cell_velocities_and_weights");
         _mark_fluid_cells = _compute.FindKernel("mark_fluid_cells");
+        _particle_to_grid = _compute.FindKernel("particle_to_grid");
+        _avg_cell_velocities = _compute.FindKernel("avg_cell_velocities");
+        _reset_particle_densities = _compute.FindKernel("reset_particle_densities");
+        _update_particle_densities = _compute.FindKernel("update_particle_densities");
+        _solve_Incompressibility = _compute.FindKernel("solve_Incompressibility");
+        _grid_to_particle = _compute.FindKernel("grid_to_particle");
 
         // Create Buffers
         UpdateBuffers();
@@ -210,6 +226,9 @@ public class Main : MonoBehaviour
 
         _prevCellVelocityBuffer?.Release();
         _prevCellVelocityBuffer = null;
+
+        _particleDensityBuffer?.Release();
+        _particleDensityBuffer = null;
 }   
 
     private void setSolidCells()
@@ -249,6 +268,8 @@ public class Main : MonoBehaviour
 
         _cellVelocityBuffer = new ComputeBuffer(_numCells, 12);
 
+        _particleDensityBuffer = new ComputeBuffer(_numCells, 4);
+
         // Set buffer for mesh properties to be shared by compute shader and instance renderer.
         _compute.SetBuffer(_render_particles, "meshProperties", _meshPropertiesBuffer) ;
         _compute.SetBuffer(_render_particles, "particlePositions", _particlePositionsBuffer);
@@ -274,9 +295,40 @@ public class Main : MonoBehaviour
         _compute.SetBuffer(_mark_fluid_cells, "cellTypes", _cellTypeBuffer);
         _compute.SetBuffer(_mark_fluid_cells, "particlePositions", _particlePositionsBuffer);
 
+        // Set for particle_to_grid
+        _compute.SetBuffer(_particle_to_grid, "particlePositions", _particlePositionsBuffer);
+        _compute.SetBuffer(_particle_to_grid, "particleVelocities", _particleVelocitiesBuffer);
+        _compute.SetBuffer(_particle_to_grid, "cellVelocities", _cellVelocityBuffer);
+        _compute.SetBuffer(_particle_to_grid, "cellWeights", _cellWeightBuffer);
+
+        // Set for avg_cell_velocities
+        _compute.SetBuffer(_avg_cell_velocities, "cellWeights", _cellWeightBuffer);
+        _compute.SetBuffer(_avg_cell_velocities, "cellVelocities", _cellVelocityBuffer);
+
+        // Set for reset_particle_densities
+        _compute.SetBuffer(_reset_particle_densities, "particleDensity", _particleDensityBuffer);
+
+        // Set for update_particle_densities
+        _compute.SetBuffer(_update_particle_densities, "particleDensity", _particleDensityBuffer);
+        _compute.SetBuffer(_update_particle_densities, "particlePositions", _particlePositionsBuffer);
+
+        // Set for solve_Incompressibility
+        _compute.SetBuffer(_solve_Incompressibility, "particlePositions", _particlePositionsBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "cellIsSolid", _cellIsSolidBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "particleVelocities", _particleVelocitiesBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "particleDensity", _particleDensityBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "cellVelocities", _cellVelocityBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "cellTypes", _cellTypeBuffer);
+
+        // Set for grid_to_particle
+        _compute.SetBuffer(_grid_to_particle, "particlePositions", _particlePositionsBuffer);
+        _compute.SetBuffer(_grid_to_particle, "particleVelocities", _particleVelocitiesBuffer);
+        _compute.SetBuffer(_grid_to_particle, "cellTypes", _cellTypeBuffer);
+        _compute.SetBuffer(_grid_to_particle, "cellVelocities", _cellVelocityBuffer);
+
         // Set floats
         _compute.SetFloat("_gravity", _gravity);
-        _compute.SetFloat("_timeStep", _dt);
+        //_compute.SetFloat("_timeStep", _dt);
         _compute.SetFloat("_r", _r);
         _compute.SetFloat("_numSubSteps", _numSubSteps);
         _compute.SetFloat("_width", _simWidth);
@@ -284,12 +336,15 @@ public class Main : MonoBehaviour
         _compute.SetFloat("_resX", _gridResX);
         _compute.SetFloat("_resY", _gridResY);
         _compute.SetFloat("_minX", _simWidth / _gridResX + _r);
-        _compute.SetFloat("_maxX", _gridResX * (_simWidth / _gridResX) - 2 * _r);
+        _compute.SetFloat("_maxX", _gridResX * (_simWidth / _gridResX) - 2 *_r);
         _compute.SetFloat("_minY", _simHeight / _gridResY + _r);
         _compute.SetFloat("_maxY", _gridResY * (_simHeight / _gridResY) - 2*_r);
         _compute.SetFloat("FLUID_CELL", FLUID_CELL);
         _compute.SetFloat("AIR_CELL", AIR_CELL);
         _compute.SetFloat("SOLID_CELL", SOLID_CELL);
+        _compute.SetFloat("_overrelaxation", 1.9f);
+        _compute.SetFloat("_timeStep", 1.0f / 10.0f);
+
 
 
         // Verts
@@ -301,6 +356,7 @@ public class Main : MonoBehaviour
         _argsBuffer.SetData(_args);
     }
 
+    private static int xd = 0;
 
     // Update is called once per frame
     void Update()
@@ -317,6 +373,33 @@ public class Main : MonoBehaviour
         _compute.Dispatch(_reset_cell_types, Mathf.CeilToInt(_numCells / 64f), 1, 1);
         _compute.Dispatch(_reset_cell_velocities_and_weights, Mathf.CeilToInt(_numCells / 64f), 1, 1);
         _compute.Dispatch(_mark_fluid_cells, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        _compute.Dispatch(_particle_to_grid, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        _compute.Dispatch(_avg_cell_velocities, Mathf.CeilToInt(_numCells / 64f), 1, 1);
+        //_compute.Dispatch(_reset_particle_densities, Mathf.CeilToInt(_numCells / 64f), 1, 1);
+        //_compute.Dispatch(_update_particle_densities, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        for (int i = 0; i < 1; i++)
+        {
+            _compute.Dispatch(_solve_Incompressibility, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        }
+        _compute.Dispatch(_grid_to_particle, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+
+        //if (xd == 0)
+        //{
+        //    int3[] vels = new int3[_numCells];
+
+        //    _cellVelocityBuffer.GetData(vels);
+
+        //    for (int i = 0; i < _numCells; i++)
+        //    {
+        //        if (vels[i].x != 0 || vels[i].y != 0 || vels[i].z != 0)
+        //        {
+        //            Debug.Log(i);
+        //            Debug.Log((float)vels[i].x);
+        //            Debug.Log((float)vels[i].y);
+        //            Debug.Log((float)vels[i].z);
+        //        }
+        //    }
+        //}
 
         if (showGrid)
         {
@@ -335,13 +418,14 @@ public class Main : MonoBehaviour
                 for (int j = 0; j <= _gridResY; j++)
                 {
 
-                    //if (cellTypes[i * ((int)_gridResY + 1) + j] == AIR_CELL)
-                    //{
-                    //    gridCells.Add(Instantiate(airCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * i, _simHeight / (_gridResY + 1) * j , 0), Quaternion.identity));
-                    //} else if (cellTypes[i * ((int)_gridResY + 1) + j] == SOLID_CELL)
-                    //{
-                    //    gridCells.Add(Instantiate(solidCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * i, _simHeight / (_gridResY + 1) * j, 0), Quaternion.identity));
-                    //}
+                    if (cellTypes[i * ((int)_gridResY + 1) + j] == AIR_CELL)
+                    {
+                        //gridCells.Add(Instantiate(airCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * (i + .5f), _simHeight / (_gridResY + 1) * (j + .5f), 0), Quaternion.identity));
+                    }
+                    else if (cellTypes[i * ((int)_gridResY + 1) + j] == SOLID_CELL)
+                    {
+                        gridCells.Add(Instantiate(solidCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * (i + .5f), _simHeight / (_gridResY + 1) * (j + .5f), 0), Quaternion.identity));
+                    }
                     if (cellTypes[i * ((int)_gridResY + 1) + j] == FLUID_CELL)
                     {
                         gridCells.Add(Instantiate(fluidCellPrefab, new Vector3(_simWidth / (_gridResX + 1) * (i + .5f), _simHeight / (_gridResY + 1) * (j + .5f), 0), Quaternion.identity));

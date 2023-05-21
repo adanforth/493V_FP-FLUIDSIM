@@ -158,7 +158,7 @@ MonoBehaviour:
   airCellPrefab: {fileID: 7145732415636876144, guid: b45e5408dff726f4f9e1f06def977bfd, type: 3}
   solidCellPrefab: {fileID: 5530274454533435846, guid: 25d6d43b20547d643b3f2f73aa9b81e0, type: 3}
   fluidCellPrefab: {fileID: 8210444231714497919, guid: fad392af1a2f1df49bc2abbbabe404c9, type: 3}
-  showGrid: 1
+  showGrid: 0
   _gridCellDensity: 1
   _simWidth: 40
   _simHeight: 20
