@@ -152,16 +152,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f5916df543c86b429b6a3dd1eca3b6d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _instanceMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  _instanceMesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
   _instanceMaterial: {fileID: 2100000, guid: 59db67341b3a7fe428f095403620f80d, type: 2}
   cam: {fileID: 963194227}
   airCellPrefab: {fileID: 7145732415636876144, guid: b45e5408dff726f4f9e1f06def977bfd, type: 3}
   solidCellPrefab: {fileID: 5530274454533435846, guid: 25d6d43b20547d643b3f2f73aa9b81e0, type: 3}
   fluidCellPrefab: {fileID: 8210444231714497919, guid: fad392af1a2f1df49bc2abbbabe404c9, type: 3}
   showGrid: 0
-  _gridCellDensity: 1
-  _simWidth: 60
-  _simHeight: 30
+  _solveIterations: 300
+  _gridCellDensity: 4
+  _simWidth: 40
+  _simHeight: 20
   _compute: {fileID: 7200000, guid: e10385ef8d17c764783affc05aa4f229, type: 3}
 --- !u!4 &19100044
 Transform:

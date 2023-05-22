@@ -16,6 +16,7 @@ public class Main : MonoBehaviour
     [SerializeField] private GameObject fluidCellPrefab;
     private List<GameObject> gridCells = new List<GameObject>();
     [SerializeField] bool showGrid;
+    [SerializeField] int _solveIterations = 1;
 
 
 
@@ -86,9 +87,13 @@ public class Main : MonoBehaviour
     private int _restore_solid_cells;
     private int _reset_particle_densities;
     private int _update_particle_densities;
+    private int _reset_projection_updates;
     private int _solve_Incompressibility;
+    private int _add_projection_to_velocities;
     private int _grid_to_particle;
     private int _convert_velocity_and_weight_to_float;
+    private int _convert_velocity_to_int;
+    private int _convert_velocity_to_float;
 
 
 
@@ -100,6 +105,7 @@ public class Main : MonoBehaviour
     private ComputeBuffer _cellIsSolidBuffer; // Fixed buffer - sets boundary cells to solid
     private ComputeBuffer _cellVelocityBuffer;
     private ComputeBuffer _cellVelocityBufferInt;
+    private ComputeBuffer _cellProjectionUpdatesBuffer;
     private ComputeBuffer _cellWeightBuffer;
     private ComputeBuffer _cellWeightBufferInt;
     private ComputeBuffer _prevCellVelocityBuffer;
@@ -122,8 +128,6 @@ public class Main : MonoBehaviour
 
         float h = _simHeight / res;
 
-        Debug.Log(h);
-
 
         // Particle stuff
         _r = 0.3f * h;
@@ -131,7 +135,7 @@ public class Main : MonoBehaviour
 
 
         // Setting up for "Dam Break" init
-        float relativeWaterHeight = 0.8f;
+        float relativeWaterHeight = 0.9f;
         float relativeWaterWidth = 0.6f;
         float dx = 2.0f * _r;
         float dy = math.sqrt(3.0f) / 2.0f * dx;
@@ -146,16 +150,10 @@ public class Main : MonoBehaviour
         _fNumY = (int)math.floor(_simHeight / h) + 1;
 
 
-        Debug.Log(_fNumX);
-        Debug.Log(_fNumY);
-
         _fNumCells = _fNumX * _fNumY;
 
         _h = math.max(_simWidth / _fNumX, _simHeight / _fNumY);
         _fInvSpacing = 1.0f / _h;
-
-        Debug.Log(_h);
-        Debug.Log(_fInvSpacing);
 
 
         // instantiate init arrays
@@ -201,7 +199,11 @@ public class Main : MonoBehaviour
         _restore_solid_cells = _compute.FindKernel("restore_solid_cells");
         _reset_particle_densities = _compute.FindKernel("reset_particle_densities");
         _update_particle_densities = _compute.FindKernel("update_particle_densities");
+        _reset_projection_updates = _compute.FindKernel("reset_projection_updates");
+        _convert_velocity_to_int = _compute.FindKernel("convert_velocity_to_int");
         _solve_Incompressibility = _compute.FindKernel("solve_Incompressibility");
+        _convert_velocity_to_float = _compute.FindKernel("convert_velocity_to_float");
+        _add_projection_to_velocities = _compute.FindKernel("add_projection_to_velocities");
         _grid_to_particle = _compute.FindKernel("grid_to_particle");
 
         // Create Buffers
@@ -246,6 +248,9 @@ public class Main : MonoBehaviour
 
         _cellVelocityBufferInt?.Release();
         _cellVelocityBufferInt = null;
+
+        _cellProjectionUpdatesBuffer?.Release();
+        _cellProjectionUpdatesBuffer = null;
     }   
 
     private void setSolidCells()
@@ -294,6 +299,8 @@ public class Main : MonoBehaviour
         _cellVelocityBufferInt = new ComputeBuffer(_fNumCells, 12);
 
         _particleDensityBuffer = new ComputeBuffer(_fNumCells, 4);
+
+        _cellProjectionUpdatesBuffer = new ComputeBuffer(_fNumCells, 12);
 
         // Set buffer for mesh properties to be shared by compute shader and instance renderer.
         _compute.SetBuffer(_render_particles, "meshProperties", _meshPropertiesBuffer) ;
@@ -355,13 +362,28 @@ public class Main : MonoBehaviour
         _compute.SetBuffer(_update_particle_densities, "particleDensity", _particleDensityBuffer);
         _compute.SetBuffer(_update_particle_densities, "particlePositions", _particlePositionsBuffer);
 
+        // Set for reset_projection_updates
+        _compute.SetBuffer(_reset_projection_updates, "projectionUpdates", _cellProjectionUpdatesBuffer);
+
+        // Set for add_projection_to_velocities
+        _compute.SetBuffer(_add_projection_to_velocities, "projectionUpdates", _cellProjectionUpdatesBuffer);
+        _compute.SetBuffer(_add_projection_to_velocities, "cellVelocities", _cellVelocityBuffer);
+
+        // Set for convert_velocity_to_int
+        _compute.SetBuffer(_convert_velocity_to_int, "cellVelocities", _cellVelocityBuffer);
+        _compute.SetBuffer(_convert_velocity_to_int, "cellVelocitiesInt", _cellVelocityBufferInt);
+
+        // Set for convert_velocity_to_float
+        _compute.SetBuffer(_convert_velocity_to_float, "cellVelocities", _cellVelocityBuffer);
+        _compute.SetBuffer(_convert_velocity_to_float, "cellVelocitiesInt", _cellVelocityBufferInt);
+
         // Set for solve_Incompressibility
-        _compute.SetBuffer(_solve_Incompressibility, "particlePositions", _particlePositionsBuffer);
-        _compute.SetBuffer(_solve_Incompressibility, "cellIsSolid", _cellIsSolidBuffer);
-        _compute.SetBuffer(_solve_Incompressibility, "particleVelocities", _particleVelocitiesBuffer);
-        _compute.SetBuffer(_solve_Incompressibility, "particleDensity", _particleDensityBuffer);
-        _compute.SetBuffer(_solve_Incompressibility, "cellVelocities", _cellVelocityBuffer);
         _compute.SetBuffer(_solve_Incompressibility, "cellTypes", _cellTypeBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "cellIsSolid", _cellIsSolidBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "cellVelocities", _cellVelocityBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "cellVelocitiesInt", _cellVelocityBufferInt);
+        _compute.SetBuffer(_solve_Incompressibility, "particleDensity", _particleDensityBuffer);
+        _compute.SetBuffer(_solve_Incompressibility, "projectionUpdates", _cellProjectionUpdatesBuffer);
 
         // Set for grid_to_particle
         _compute.SetBuffer(_grid_to_particle, "particlePositions", _particlePositionsBuffer);
@@ -380,6 +402,7 @@ public class Main : MonoBehaviour
         _compute.SetFloat("_fInvSpacing", _fInvSpacing);
         _compute.SetInt("_fNumX", _fNumX);
         _compute.SetInt("_fNumY", _fNumY);
+        _compute.SetFloat("_numIterations", _solveIterations);
         //_compute.SetFloat("_resX", _gridResX);
         //_compute.SetFloat("_resY", _gridResY);
         _compute.SetFloat("_minX", _h + _r);
@@ -389,7 +412,7 @@ public class Main : MonoBehaviour
         _compute.SetFloat("FLUID_CELL", FLUID_CELL);
         _compute.SetFloat("AIR_CELL", AIR_CELL);
         _compute.SetFloat("SOLID_CELL", SOLID_CELL);
-        _compute.SetFloat("_overrelaxation", 1.9f);
+        _compute.SetFloat("_overrelaxation", 1.95f);
         _compute.SetFloat("_timeStep", 1.0f / 160.0f);
 
 
@@ -408,7 +431,7 @@ public class Main : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        _compute.SetFloat("_timeStep", 5 * Time.deltaTime);
+        _compute.SetFloat("_timeStep", 1.5f * Time.deltaTime);
 
         Debug.DrawLine(new Vector3(0,0, 0), new Vector3(0, _simHeight + _h/2, 0), Color.gray);
         Debug.DrawLine(new Vector3(0, 0, 0), new Vector3(_simWidth +0, 0, 0), Color.gray);
@@ -418,7 +441,9 @@ public class Main : MonoBehaviour
         _compute.Dispatch(_render_particles, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
         // Integrate particles
         _compute.Dispatch(_integrate_particles, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        // Enforce Boundaries
         _compute.Dispatch(_enforce_boundaries, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+        // Transfer to Grid
         _compute.Dispatch(_reset_cell_types, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_reset_cell_velocities_and_weights, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_copy_prev_velocities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
@@ -427,13 +452,25 @@ public class Main : MonoBehaviour
         _compute.Dispatch(_convert_velocity_and_weight_to_float, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_avg_cell_velocities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_restore_solid_cells, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+        // Solve for incompressibility
+        //_compute.Dispatch(_copy_prev_velocities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+        for (int iter = 0; iter < _solveIterations; iter++)
+        {
+            _compute.Dispatch(_reset_projection_updates, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+            //_compute.Dispatch(_convert_velocity_to_int, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+            _compute.Dispatch(_solve_Incompressibility, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+            //_compute.Dispatch(_convert_velocity_to_float, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+            _compute.Dispatch(_add_projection_to_velocities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
+        }
+        _compute.Dispatch(_grid_to_particle, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
+
+
         //_compute.Dispatch(_reset_particle_densities, Mathf.CeilToInt(_numCells / 64f), 1, 1);
         //_compute.Dispatch(_update_particle_densities, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
         //for (int i = 0; i < 1; i++)
         //{
         //    _compute.Dispatch(_solve_Incompressibility, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
         //}
-        _compute.Dispatch(_grid_to_particle, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
 
         //if (xd == 0)
         //{

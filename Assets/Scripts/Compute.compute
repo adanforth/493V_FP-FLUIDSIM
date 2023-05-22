@@ -28,6 +28,13 @@
 
 #pragma kernel grid_to_particle;
 
+#pragma kernel add_projection_to_velocities;
+
+#pragma kernel reset_projection_updates;
+
+#pragma kernel convert_velocity_to_int;
+
+#pragma kernel convert_velocity_to_float;
 
 //#include <UnityShaderVariables.cginc>
 
@@ -48,21 +55,28 @@ float _timeStep;
 float _numSubSteps;
 
 // Grid Stuff
+// Cell type stuff
 RWStructuredBuffer<float> cellTypes;
 StructuredBuffer<float> cellIsSolid;
+
+
 RWStructuredBuffer<float3> cellWeights;
 RWStructuredBuffer<float3> cellVelocities;
 RWStructuredBuffer<float3> prevCellVelocities;
 RWStructuredBuffer<int3> cellWeightsInt;
 RWStructuredBuffer<int3> cellVelocitiesInt;
+
+// projection
 RWStructuredBuffer<int> particleDensity;
+RWStructuredBuffer<int3> projectionUpdates;
+
 float _width;
 float _height;
-
+float _numIterations;
 float _h;
 float _fInvSpacing;
-int _fNumX;
-int _fNumY;
+uint _fNumX;
+uint _fNumY;
 
 float _resX;
 float _resY;
@@ -310,7 +324,7 @@ void avg_cell_velocities(uint3 id : SV_DispatchThreadID)
 void restore_solid_cells(uint3 id : SV_DispatchThreadID)
 {
     bool solid = cellTypes[id.x] == SOLID_CELL;
-    if (solid || (id.x > _fNumY && cellTypes[id.x - _fNumX] == SOLID_CELL))
+    if (solid || (id.x > _fNumY && cellTypes[id.x - _fNumY] == SOLID_CELL))
     {
         cellVelocities[id.x].x = prevCellVelocities[id.x].x;
     }
@@ -377,65 +391,75 @@ void update_particle_densities(uint3 id : SV_DispatchThreadID)
 
 
 [numthreads(64, 1, 1)]
-void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
+void reset_projection_updates(uint3 id : SV_DispatchThreadID)
 {
-    //int n = _resY + 1;
-    //float h = _height / _resY;
-    //float h1 = 1.0 / h;
-    //float h2 = 0.5 * h;
-    
-    //float x_p = particlePositions[id.x].x;
-    //float y_p = particlePositions[id.x].y;
-    
-    //int x_i = (int) clamp(floor(x_p * h1), 0.0, _resX);
-    //int y_i = (int) clamp(floor(y_p * h1), 0.0, _resY);
-
-    //int cell_nr = (int) x_i * n + y_i;
-    
-    //if (cellTypes[cell_nr] == FLUID_CELL)
-    //{
-    //    int left_cell_nr = cell_nr - n;
-    //    int right_cell_nr = cell_nr + n;
-    //    int bottom_cell_nr = cell_nr - 1;
-    //    int top_cell_nr = cell_nr + 1;
-        
-    //    int sx0 = cellIsSolid[left_cell_nr];
-    //    int sx1 = cellIsSolid[right_cell_nr];
-    //    int sy0 = cellIsSolid[bottom_cell_nr];
-    //    int sy1 = cellIsSolid[top_cell_nr];
-
-    //    int s = sx0 + sx1 + sy0 + sy1;
-        
-    //    if (s != 0.0)
-    //    {
-    //        float div = particleVelocities[right_cell_nr].x -
-    //                    particleVelocities[cell_nr].x +
-    //                    particleVelocities[top_cell_nr].y -
-    //                    particleVelocities[cell_nr].y;
-            
-    //        if (_particleRestDensity > 0)
-    //        {
-    //            float k = 1.0;
-    //            float compression = ((float) particleDensity[cell_nr]) / 10000.0 - _particleRestDensity;
-    //            if (compression > 0.0)
-    //            {
-    //                div = div - k * compression;
-    //            }
-    //        }
-            
-    //        float p = -1.0 * div / s;
-    //        p *= _overrelaxation;
-
-    //        InterlockedAdd(cellVelocities[cell_nr].x, -1 * (int) (10000.0f * sx0 * p));
-    //        InterlockedAdd(cellVelocities[right_cell_nr].x, (int) (10000.0f * sx1 * p));
-    //        InterlockedAdd(cellVelocities[cell_nr].y, -1 * (int) (10000.0f * sy0 * p));
-    //        InterlockedAdd(cellVelocities[top_cell_nr].y, (int) (10000.0f * sy1 * p));
-            
-    //    }
-    //}
-
+    projectionUpdates[id.x].x = 0;
+    projectionUpdates[id.x].y = 0;
 }
 
+[numthreads(64, 1, 1)]
+void convert_velocity_to_int(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocitiesInt[id.x].x = (int) (cellVelocities[id.x].x * 1000000.0f);
+    cellVelocitiesInt[id.x].y = (int) (cellVelocities[id.x].y * 1000000.0f);
+}
+
+[numthreads(64, 1, 1)]
+void convert_velocity_to_float(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x].x = ((float) cellVelocitiesInt[id.x].x) / 1000000.0f;
+    cellVelocities[id.x].y = ((float) cellVelocitiesInt[id.x].y) / 1000000.0f;
+}
+
+
+[numthreads(64, 1, 1)]
+void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
+{    
+    uint center = id.x;
+    if (cellTypes[center] == FLUID_CELL)
+    {
+        
+        uint left = center - _fNumY;
+        uint right = center + _fNumY;
+        uint bottom = center - 1;
+        uint top = center + 1;
+        
+        int sx0 = cellIsSolid[left];
+        int sx1 = cellIsSolid[right];
+        int sy0 = cellIsSolid[bottom];
+        int sy1 = cellIsSolid[top];
+        
+        int s = sx0 + sx1 + sy0 + sy1;
+        
+        if (s != 0)
+        {
+            //float div = cellVelocitiesInt[right].x - cellVelocitiesInt[center].x +
+            //            cellVelocitiesInt[top].y - cellVelocitiesInt[center].y; 
+            float div = cellVelocities[right].x - cellVelocities[center].x +
+                        cellVelocities[top].y - cellVelocities[center].y;
+            
+            float p = -1 * div / s;
+            p *= _overrelaxation;
+            
+            //InterlockedAdd(cellVelocitiesInt[center].x, -1 * (int) (p * sx0 * 1000000.0f));
+            //InterlockedAdd(cellVelocitiesInt[right].x, (int) (p * sx1 * 1000000.0f));
+            //InterlockedAdd(cellVelocitiesInt[center].y, -1 * (int) (p * sy0 * 1000000.0f));
+            //InterlockedAdd(cellVelocitiesInt[top].y, (int) (p * sy1 * 1000000.0f));
+            
+            InterlockedAdd(projectionUpdates[center].x, -1 * (int) (1000000.0f * sx0 * p));
+            InterlockedAdd(projectionUpdates[right].x, (int) (1000000.0f * sx1 * p));
+            InterlockedAdd(projectionUpdates[center].y, -1 * (int) (1000000.0f * sy0 * p));
+            InterlockedAdd(projectionUpdates[top].y, (int) (1000000.0f * sy1 * p));
+        }
+    }
+}
+
+[numthreads(64, 1, 1)]
+void add_projection_to_velocities(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x].x += (((float) projectionUpdates[id.x].x) / 1000000.0f) / 4;
+    cellVelocities[id.x].y += (((float) projectionUpdates[id.x].y) / 1000000.0f) / 4;
+}
 
 [numthreads(64, 1, 1)]
 void grid_to_particle(uint3 id : SV_DispatchThreadID)
