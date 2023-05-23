@@ -24,6 +24,10 @@
 
 #pragma kernel update_particle_densities;
 
+#pragma kernel calc_particle_rest_density_pt1;
+
+#pragma kernel calc_particle_rest_density_pt2;
+
 #pragma kernel solve_Incompressibility;
 
 #pragma kernel grid_to_particle;
@@ -70,6 +74,8 @@ RWStructuredBuffer<int3> cellVelocitiesInt;
 RWStructuredBuffer<int> particleDensity;
 RWStructuredBuffer<int3> projectionUpdates;
 
+RWStructuredBuffer<int2> densitySumAndNumFluid;
+
 float _width;
 float _height;
 float _numIterations;
@@ -77,6 +83,7 @@ float _h;
 float _fInvSpacing;
 uint _fNumX;
 uint _fNumY;
+float _flipRatio;
 
 float _resX;
 float _resY;
@@ -127,7 +134,9 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 
 [numthreads(64, 1, 1)]
 void integrate_particles(uint3 id : SV_DispatchThreadID) 
-{
+{    
+    //float randomJitter = RandomFloat(_timeStep * id.x);
+    
     particleVelocities[id.x].y += _timeStep * _gravity;
     //particleVelocities[id.x].y += _timeStep * 3 * (2 * RandomFloat(id.x) - 1);
     //particleVelocities[id.x].x += _timeStep * 3 * (2 * RandomFloat(id.x) - 1);
@@ -343,52 +352,64 @@ void reset_particle_densities(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void update_particle_densities(uint3 id : SV_DispatchThreadID)
 {
-    int n = _resY + 1;
-    float h = _height / _resY;
-    float h1 = 1.0 / h;
-    float h2 = 0.5 * h;
+    float h2 = 0.5 * _h;
     
     // given some point...
     float x_p = particlePositions[id.x].x;
     float y_p = particlePositions[id.x].y;
     
-    x_p = clamp(x_p, h, _resX * h);
-    y_p = clamp(y_p, h, _resY * h);
+    x_p = clamp(x_p, _h, (_fNumX - 1) * _h);
+    y_p = clamp(y_p, _h, (_fNumY - 1)  * _h);
     
-    int x0 = (int) floor((x_p - h2) * h1);
-    float tx = ((x_p - h2) - x0 * h) * h1;
-    int x1 = (int) min(x0 + 1, _resX - 1);
+    int x0 = (int) floor((x_p - h2) * _fInvSpacing);
+    float tx = ((x_p - h2) - x0 * _h) * _fInvSpacing;
+    int x1 = (int) min(x0 + 1, _fNumX - 2);
     
-    int y0 = (int) floor((y_p - h2) * h1);
-    float ty = ((y_p - h2) - y0 * h) * h1;
-    int y1 = (int) min(y0 + 1, _resY - 1);
+    int y0 = (int) floor((y_p - h2) * _fInvSpacing);
+    float ty = ((y_p - h2) - y0 * _h) * _fInvSpacing;
+    int y1 = (int) min(y0 + 1, _fNumY - 2);
 
     float sx = 1.0 - tx;
     float sy = 1.0 - ty;
     
-    int nr0 = x0 * n + y0;
-    int nr1 = x1 * n + y0;
-    int nr2 = x1 * n + y1;
-    int nr3 = x0 * n + y1;
+    int nr0 = x0 * _fNumY + y0;
+    int nr1 = x1 * _fNumY + y0;
+    int nr2 = x1 * _fNumY + y1;
+    int nr3 = x0 * _fNumY + y1;
     
-    if (x0 <= _resX && y0 <= _resY)
+    if (x0 < _fNumX && y0 < _fNumY)
     {
-        InterlockedAdd(particleDensity[nr0], (int) (sx * sy * 10000.0));
-    } 
-    if (x1 <= _resX && y0 <= _resY)
-    {
-        InterlockedAdd(particleDensity[nr1], (int) (tx * sy * 10000.0));
+        InterlockedAdd(particleDensity[nr0], (int) (sx * sy * 100000.0f));
     }
-    if (x1 <= _resX && y1 <= _resY)
+    if (x1 < _fNumX && y0 < _fNumY)
     {
-        InterlockedAdd(particleDensity[nr2], (int) (tx * ty * 10000.0));
+        InterlockedAdd(particleDensity[nr1], (int) (tx * sy * 100000.0f));
     }
-    if (x0 <= _resX && y1 <= _resY)
+    if (x1 < _fNumX && y1 < _fNumY)
     {
-        InterlockedAdd(particleDensity[nr3], (int) (sx * ty * 10000.0));
-    }    
+        InterlockedAdd(particleDensity[nr2], (int) (tx * ty * 100000.0f));
+    }
+    if (x0 < _fNumX && y1 < _fNumY)
+    {
+        InterlockedAdd(particleDensity[nr3], (int) (sx * ty * 100000.0f));
+    }
 }
 
+[numthreads(64, 1, 1)]
+void calc_particle_rest_density_pt1(uint3 id : SV_DispatchThreadID)
+{
+    if (cellTypes[id.x] == FLUID_CELL)
+    {
+        InterlockedAdd(densitySumAndNumFluid[0].x, particleDensity[id.x]);
+        InterlockedAdd(densitySumAndNumFluid[0].y, 1);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void calc_particle_rest_density_pt2(uint3 id : SV_DispatchThreadID)
+{
+    _particleRestDensity = (((float) densitySumAndNumFluid[0].x) / 100000.0f) / (float) densitySumAndNumFluid[0].y;
+}
 
 [numthreads(64, 1, 1)]
 void reset_projection_updates(uint3 id : SV_DispatchThreadID)
@@ -437,6 +458,15 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
             //            cellVelocitiesInt[top].y - cellVelocitiesInt[center].y; 
             float div = cellVelocities[right].x - cellVelocities[center].x +
                         cellVelocities[top].y - cellVelocities[center].y;
+            
+            if (_particleRestDensity > 0.0)
+            {
+                float k = 1.0;
+                float compression = ((float) particleDensity[center]) / 100000.0f - _particleRestDensity;
+                if (compression > 0.0)
+                    div = div - k * compression;
+            }
+
             
             float p = -1 * div / s;
             p *= _overrelaxation;
@@ -515,8 +545,18 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
                      (valid1 * d1 * cellVelocities[nr1].x) +
                      (valid2 * d2 * cellVelocities[nr2].x) +
                      (valid3 * d3 * cellVelocities[nr3].x);
+        
+        float diffU = (valid0 * d0 * (cellVelocities[nr0].x - prevCellVelocities[nr0].x)) +
+                      (valid1 * d1 * (cellVelocities[nr1].x - prevCellVelocities[nr1].x)) +
+                      (valid2 * d2 * (cellVelocities[nr2].x - prevCellVelocities[nr2].x)) +
+                      (valid3 * d3 * (cellVelocities[nr3].x - prevCellVelocities[nr3].x));
+        
         picU /= d;
-        particleVelocities[id.x].x = picU;
+        diffU /= d;
+        
+        float flipU = v + diffU;
+        
+        particleVelocities[id.x].x = (1 - _flipRatio) * picU + _flipRatio * flipU;
     }
     
     // For the v component...   
@@ -558,8 +598,19 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
                      (valid1 * d1 * cellVelocities[nr1].y) +
                      (valid2 * d2 * cellVelocities[nr2].y) +
                      (valid3 * d3 * cellVelocities[nr3].y);
+
+        float diffV = (valid0 * d0 * (cellVelocities[nr0].y - prevCellVelocities[nr0].y)) +
+                      (valid1 * d1 * (cellVelocities[nr1].y - prevCellVelocities[nr1].y)) +
+                      (valid2 * d2 * (cellVelocities[nr2].y - prevCellVelocities[nr2].y)) +
+                      (valid3 * d3 * (cellVelocities[nr3].y - prevCellVelocities[nr3].y));
+        
         picV /= d;
-        particleVelocities[id.x].y = picV;
+        diffV /= d;
+        
+        float flipV = v + diffV;
+        
+        particleVelocities[id.x].y = (1 - _flipRatio) * picV + _flipRatio * flipV;
+        
     }
         
 }
