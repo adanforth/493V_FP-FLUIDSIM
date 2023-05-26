@@ -19,7 +19,9 @@ public class Main : MonoBehaviour
     [SerializeField] int _solveIterations = 1;
 
 
-
+    private Vector3 _curMousePos;
+    private Vector3 _prevMousePos;
+    private Vector3 _mouseVelocity;
 
     // Mesh Data for rendering particles uniqely - add colors etc later
     private struct Mesh_Data
@@ -129,9 +131,12 @@ public class Main : MonoBehaviour
     void Start()
     {
         // Move camera
+        cam = Camera.main;
         cam.transform.position = new Vector3(_simWidth / 2, _simHeight / 2, - _simWidth / 2);
-           
 
+        _curMousePos = Vector3.zero;
+        _prevMousePos = Vector3.zero;
+        _mouseVelocity = Vector3.zero;
         // Grid stuff
         //_gridResY = math.floor(_simHeight * _gridCellDensity);
         //_gridResX = math.floor(_simWidth * _gridCellDensity);
@@ -143,7 +148,7 @@ public class Main : MonoBehaviour
 
         // Particle stuff
         _r = 0.3f * h;
-        _particleScale = new Vector3(2 * _r, 2 * _r, 2 * _r);
+        _particleScale = new Vector3(1 * _r, 1 * _r, 1 * _r);
 
 
         // Setting up for "Dam Break" init
@@ -439,7 +444,7 @@ public class Main : MonoBehaviour
         _compute.SetFloat("AIR_CELL", AIR_CELL);
         _compute.SetFloat("SOLID_CELL", SOLID_CELL);
         _compute.SetFloat("_overrelaxation", 1.95f);
-        _compute.SetFloat("_timeStep", 1.0f / 160.0f);
+        //_compute.SetFloat("_timeStep", 1.0f / 120.0f);
         _compute.SetFloat("_flipRatio", _flipRatio);
         _compute.SetFloat("_particleRestDensity", 0);
 
@@ -455,11 +460,69 @@ public class Main : MonoBehaviour
     }
 
     private static int xd = 0;
+    private GameObject xdd;
 
     // Update is called once per frame
     void Update()
     {
-        _compute.SetFloat("_timeStep", 1.5f * Time.deltaTime);
+
+        if (Input.GetMouseButton(0))
+        {
+            if (_curMousePos == Vector3.zero)
+            {
+                Vector3 screenMousePos = Input.mousePosition;
+                _curMousePos = cam.ScreenToWorldPoint(new Vector3(screenMousePos.x, screenMousePos.y, _simWidth / 2));
+                _prevMousePos = _curMousePos;
+                _mouseVelocity = _curMousePos - _prevMousePos;
+            }
+            else
+            {
+                _prevMousePos = _curMousePos;
+                Vector3 screenMousePos = Input.mousePosition;
+
+                _curMousePos = cam.ScreenToWorldPoint(new Vector3(screenMousePos.x, screenMousePos.y, _simWidth / 2));
+                _mouseVelocity = _curMousePos - _prevMousePos;
+            }
+
+            //Debug.Log(_curMousePos);
+
+            
+            float h2 = 0.5f * _h;
+
+            // given some point...
+            float x_p = _curMousePos.x;
+            float y_p = _curMousePos.y;
+
+            x_p = math.clamp(x_p, _h, (_fNumX - 1) * _h);
+            y_p = math.clamp(y_p, _h, (_fNumY - 1) * _h);
+
+            int x0 = (int)math.floor((x_p - h2) * _fInvSpacing);
+            int y0 = (int)math.floor((y_p - h2) * _fInvSpacing);
+
+            _compute.SetBool("_mouseDown", true);
+            _compute.SetInt("_mouseCellX", x0);
+            _compute.SetInt("_mouseCellY", y0);
+            _compute.SetFloat("_mouseVelocityX", _mouseVelocity.x);
+            _compute.SetFloat("_mouseVelocityY", _mouseVelocity.y);
+
+        } else
+        {
+            _curMousePos = Vector3.zero;
+            _prevMousePos = _curMousePos;
+            _mouseVelocity = Vector3.zero;
+
+            _compute.SetBool("_mouseDown", false);
+        }
+
+
+        //Debug.Log(x0);
+        //Debug.Log(y0);
+
+        //Destroy(xdd);
+        //xdd = Instantiate(fluidCellPrefab, new Vector3(_h * (x0 + 1f), _h * (y0 + 1f), 0), Quaternion.identity);
+
+        _compute.SetFloat("_timeStep", 2 * Time.deltaTime);
+        //_compute.SetFloat("_timeStep", 1f / 120f);
 
         Debug.DrawLine(new Vector3(0,0, 0), new Vector3(0, _simHeight + _h/2, 0), Color.gray);
         Debug.DrawLine(new Vector3(0, 0, 0), new Vector3(_simWidth +0, 0, 0), Color.gray);
@@ -485,8 +548,6 @@ public class Main : MonoBehaviour
         _compute.Dispatch(_update_particle_densities, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
         if (xd == 0)
         {
-
-
             _compute.Dispatch(_calc_particle_rest_density_pt1, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
             int2[] densitySumAndNumFluid = new int2[1];
 
@@ -505,6 +566,13 @@ public class Main : MonoBehaviour
         }
         _compute.Dispatch(_grid_to_particle, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
 
+        //int[] den = new int[_fNumCells];
+
+        //_particleDensityBuffer.GetData(den);
+        //for (int i = _fNumX / 4; i < 3 * _fNumX / 4; i++)
+        //{
+        //    Debug.Log((float)den[i * _fNumY] / 100000.0f);
+        //}
 
         //for (int i = 0; i < 1; i++)
         //{

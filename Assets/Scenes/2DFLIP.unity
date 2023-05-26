@@ -159,13 +159,13 @@ MonoBehaviour:
   solidCellPrefab: {fileID: 5530274454533435846, guid: 25d6d43b20547d643b3f2f73aa9b81e0, type: 3}
   fluidCellPrefab: {fileID: 8210444231714497919, guid: fad392af1a2f1df49bc2abbbabe404c9, type: 3}
   showGrid: 0
-  _solveIterations: 900
+  _solveIterations: 1000
   _gridCellDensity: 4
-  _simWidth: 40
-  _simHeight: 20
-  _flipRatio: 0.9
-  relativeWaterHeight: 0.8
-  relativeWaterWidth: 0.4
+  _simWidth: 20
+  _simHeight: 10
+  _flipRatio: 0.95
+  relativeWaterHeight: 0.9
+  relativeWaterWidth: 0.3
   _compute: {fileID: 7200000, guid: e10385ef8d17c764783affc05aa4f229, type: 3}
 --- !u!4 &19100044
 Transform:

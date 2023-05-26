@@ -84,6 +84,13 @@ float _fInvSpacing;
 uint _fNumX;
 uint _fNumY;
 float _flipRatio;
+int3 _mouseCell;
+float2 _mouseVelocity;
+int _mouseCellX;
+int _mouseCellY;
+float _mouseVelocityX;
+float _mouseVelocityY;
+bool _mouseDown;
 
 float _resX;
 float _resY;
@@ -135,11 +142,15 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void integrate_particles(uint3 id : SV_DispatchThreadID) 
 {    
-    //float randomJitter = RandomFloat(_timeStep * id.x);
+    //float randomJitterX = .5 - RandomFloat(WangHash(_timeStep * id.x));
+    //float randomJitterY = .5 - RandomFloat(WangHash(_timeStep / id.x));
+    
+    //if (particlePositions[id.x].y < _h)
+    //{
+    //    particlePositions[id.x].y += 0.01 * randomJitterX;
+    //}
     
     particleVelocities[id.x].y += _timeStep * _gravity;
-    //particleVelocities[id.x].y += _timeStep * 3 * (2 * RandomFloat(id.x) - 1);
-    //particleVelocities[id.x].x += _timeStep * 3 * (2 * RandomFloat(id.x) - 1);
     particlePositions[id.x].x += particleVelocities[id.x].x * _timeStep;
     particlePositions[id.x].y += particleVelocities[id.x].y * _timeStep;
 }
@@ -461,8 +472,14 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
             
             if (_particleRestDensity > 0.0)
             {
-                float k = 1.0;
-                float compression = ((float) particleDensity[center]) / 100000.0f - _particleRestDensity;
+                float rest = _particleRestDensity;
+                //if (center % _fNumY <= )
+                //{
+                //    rest *= 6;
+                //}
+                
+                float k = 1;
+                float compression = ((float) particleDensity[center]) / 100000.0f - rest;
                 if (compression > 0.0)
                     div = div - k * compression;
             }
@@ -487,8 +504,15 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void add_projection_to_velocities(uint3 id : SV_DispatchThreadID)
 {
-    cellVelocities[id.x].x += (((float) projectionUpdates[id.x].x) / 1000000.0f) / 4;
-    cellVelocities[id.x].y += (((float) projectionUpdates[id.x].y) / 1000000.0f) / 4;
+    float scale = .3;
+
+    //if (_particleRestDensity > 0)
+    //{
+    //    scale = _timeStep / (_particleRestDensity * _h);
+    //}
+
+    cellVelocities[id.x].x += (((float) projectionUpdates[id.x].x) / 1000000.0f) * scale;
+    cellVelocities[id.x].y += (((float) projectionUpdates[id.x].y) / 1000000.0f) * scale;
 }
 
 [numthreads(64, 1, 1)]
@@ -555,8 +579,12 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
         diffU /= d;
         
         float flipU = v + diffU;
-        
+
         particleVelocities[id.x].x = (1 - _flipRatio) * picU + _flipRatio * flipU;
+        if (_mouseDown && abs(_mouseCellY - y0) < 2 && abs(_mouseCellX - x0) < 2)
+        {
+            particleVelocities[id.x].x +=  25 * _mouseVelocityX;
+        } 
     }
     
     // For the v component...   
@@ -610,9 +638,11 @@ void grid_to_particle(uint3 id : SV_DispatchThreadID)
         float flipV = v + diffV;
         
         particleVelocities[id.x].y = (1 - _flipRatio) * picV + _flipRatio * flipV;
-        
+        if (_mouseDown && abs(_mouseCellY - y0) < 2 && abs(_mouseCellX - x0) < 2)
+        {
+            particleVelocities[id.x].y += 25 *  _mouseVelocityY;
+        }
     }
-        
 }
 
 
