@@ -1,0 +1,968 @@
+#pragma kernel render_particles;
+
+#pragma kernel integrate_particles;
+
+#pragma kernel enforce_boundaries;
+
+#pragma kernel reset_cell_types;
+
+#pragma kernel reset_cell_velocities_and_weights;
+
+#pragma kernel mark_fluid_cells;
+
+#pragma kernel copy_prev_velocities;
+
+#pragma kernel particle_to_grid;
+
+#pragma kernel convert_velocity_and_weight_to_float;
+
+#pragma kernel avg_cell_velocities;
+
+#pragma kernel restore_solid_cells;
+
+#pragma kernel reset_particle_densities;
+
+#pragma kernel update_particle_densities;
+
+#pragma kernel calc_particle_rest_density_pt1;
+
+#pragma kernel calc_particle_rest_density_pt2;
+
+#pragma kernel solve_Incompressibility;
+
+#pragma kernel grid_to_particle;
+
+#pragma kernel add_projection_to_velocities;
+
+#pragma kernel reset_projection_updates;
+
+#pragma kernel convert_velocity_to_int;
+
+#pragma kernel convert_velocity_to_float;
+
+//#include <UnityShaderVariables.cginc>
+
+struct mesh_data
+{
+    float4x4 mat;
+};
+
+// Particle Information
+RWStructuredBuffer<float3> particlePositions;
+RWStructuredBuffer<float3> particleVelocities;
+RWStructuredBuffer<mesh_data> meshProperties;
+float _r;
+
+// Integration
+float _gravity;
+float _timeStep;
+float _numSubSteps;
+
+// Grid Stuff
+// Cell type stuff
+RWStructuredBuffer<float> cellTypes;
+StructuredBuffer<float> cellIsSolid;
+
+
+RWStructuredBuffer<float3> cellWeights;
+RWStructuredBuffer<float3> cellVelocities;
+RWStructuredBuffer<float3> prevCellVelocities;
+RWStructuredBuffer<int3> cellWeightsInt;
+RWStructuredBuffer<int3> cellVelocitiesInt;
+
+// projection
+RWStructuredBuffer<int> particleDensity;
+RWStructuredBuffer<int3> projectionUpdates;
+
+RWStructuredBuffer<int2> densitySumAndNumFluid;
+
+float _width;
+float _height;
+float _numIterations;
+float _h;
+float _fInvSpacing;
+uint _fNumX;
+uint _fNumY;
+uint _fNumZ;
+float _flipRatio;
+int3 _mouseCell;
+float2 _mouseVelocity;
+int _mouseCellX;
+int _mouseCellY;
+float _mouseVelocityX;
+float _mouseVelocityY;
+bool _mouseDown;
+
+float _resX;
+float _resY;
+float _particleRestDensity;
+float _overrelaxation;
+
+// cell states
+float FLUID_CELL;
+float AIR_CELL;
+float SOLID_CELL;
+
+// for boundaries
+float _minX;
+float _maxX;
+float _minY;
+float _maxY;
+float _minZ;
+float _maxZ;
+float x_cell_width;
+float y_cell_width;
+float z_cell_width;
+
+// RANDOMIZER
+
+uint WangHash(uint seed)
+{
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+
+// Generate a random float between 0 and 1, given a seed
+float RandomFloat(uint seed)
+{
+    return float(WangHash(seed)) / 4294967295.0;
+}
+
+[numthreads(64, 1, 1)]
+void render_particles(uint3 id : SV_DispatchThreadID)
+{
+    float4x4 mat = meshProperties[id.x].mat;
+
+    mat[0][3] = particlePositions[id.x].x - _r;
+    mat[1][3] = particlePositions[id.x].y - _r;
+    mat[2][3] = particlePositions[id.x].z - _r;
+
+    meshProperties[id.x].mat = mat;
+}
+
+[numthreads(64, 1, 1)]
+void integrate_particles(uint3 id : SV_DispatchThreadID)
+{
+    //float randomJitterX = .5 - RandomFloat(WangHash(_timeStep * id.x));
+    //float randomJitterY = .5 - RandomFloat(WangHash(_timeStep / id.x));
+    
+    //if (particlePositions[id.x].y < _h)
+    //{
+    //    particlePositions[id.x].y += 0.01 * randomJitterX;
+    //}
+    
+    particleVelocities[id.x].y += _timeStep * _gravity;
+    //particleVelocities[id.x].x += (RandomFloat(id.x)) * _timeStep * _gravity;
+    //particleVelocities[id.x].z -= (RandomFloat(id.x)) *
+    //_timeStep * _gravity;
+    particlePositions[id.x].x += particleVelocities[id.x].x * _timeStep;
+    particlePositions[id.x].y += particleVelocities[id.x].y * _timeStep;
+    particlePositions[id.x].z += particleVelocities[id.x].z * _timeStep;
+}
+
+[numthreads(64, 1, 1)]
+void enforce_boundaries(uint3 id : SV_DispatchThreadID)
+{
+    float x = particlePositions[id.x].x;
+    float y = particlePositions[id.x].y;
+    float z = particlePositions[id.x].z;
+    
+    if (x < _minX)
+    {
+        particlePositions[id.x].x = _minX;
+        particleVelocities[id.x].x = 0.0;
+    }
+    if (x > _maxX)
+    {
+        particlePositions[id.x].x = _maxX;
+        particleVelocities[id.x].x = 0.0;
+    }
+    if (y < _minY)
+    {
+        particlePositions[id.x].y = _minY;
+        particleVelocities[id.x].y = 0.0;
+    }
+    if (y > _maxY)
+    {
+        particlePositions[id.x].y = _maxY;
+        particleVelocities[id.x].y = 0.0;
+    }
+    if (z < _minZ)
+    {
+        particlePositions[id.x].z = _minZ;
+        particleVelocities[id.x].z = 0.0;
+    }
+    if (z > _maxZ)
+    {
+        particlePositions[id.x].z = _maxZ;
+        particleVelocities[id.x].z = 0.0;
+    }
+}
+
+
+[numthreads(64, 1, 1)]
+void copy_prev_velocities(uint3 id : SV_DispatchThreadID)
+{
+    prevCellVelocities[id.x] = cellVelocities[id.x];
+}
+
+[numthreads(64, 1, 1)]
+void reset_cell_velocities_and_weights(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x] = float3(0.0, 0.0, 0.0);
+    cellWeights[id.x] = float3(0.0, 0.0, 0.0);
+    cellVelocitiesInt[id.x] = int3(0.0, 0.0, 0.0);
+    cellWeightsInt[id.x] = int3(0.0, 0.0, 0.0);
+}
+
+[numthreads(64, 1, 1)]
+void reset_cell_types(uint3 id : SV_DispatchThreadID)
+{
+    cellTypes[id.x] = cellIsSolid[id.x] == 0.0 ? SOLID_CELL : AIR_CELL;
+}
+
+[numthreads(64, 1, 1)]
+void mark_fluid_cells(uint3 id : SV_DispatchThreadID)
+{
+    float x_p = particlePositions[id.x].x;
+    float y_p = particlePositions[id.x].y;
+    float z_p = particlePositions[id.x].z;
+    
+    int x_i = (int) clamp(floor(x_p * _fInvSpacing), 0.0, _fNumX - 1);
+    int y_i = (int) clamp(floor(y_p * _fInvSpacing), 0.0, _fNumY - 1);
+    int z_i = (int) clamp(floor(z_p * _fInvSpacing), 0.0, _fNumZ - 1);
+
+    int cell_nr = (int) (x_i * _fNumY * _fNumZ) + (y_i * _fNumZ) + z_i;
+    if (cellTypes[cell_nr] == AIR_CELL)
+    {
+        cellTypes[cell_nr] = FLUID_CELL;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void particle_to_grid(uint3 id : SV_DispatchThreadID)
+{
+    // given some point...
+    float x_p = particlePositions[id.x].x;
+    float y_p = particlePositions[id.x].y;
+    float z_p = particlePositions[id.x].z;
+    
+    x_p = clamp(x_p, _h, (_fNumX - 1) * _h);
+    y_p = clamp(y_p, _h, (_fNumY - 1) * _h);
+    z_p = clamp(z_p, _h, (_fNumZ - 1) * _h);
+    
+
+    // Set velocities and weights to 0.
+        // Done in prevous compute call
+    
+    // For the u component...   
+    float dx = 0.0;
+    float dy = 0.5 * _h;
+    float dz = 0.5 * _h;
+    
+    
+    int x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    int x1 = (int) min(x0 + 1.0, _fNumX - 2);
+    float tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    
+    int y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    int y1 = (int) min(y0 + 1.0, _fNumY - 2);
+    float ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    
+    int z0 = (int) min(floor((z_p - dz) * _fInvSpacing), _fNumZ - 2);
+    int z1 = (int) min(z0 + 1.0, _fNumZ - 2);
+    float tz = ((z_p - dz) - z0 * _h) * _fInvSpacing;
+    
+    float sx = 1.0 - tx;
+    float sy = 1.0 - ty;
+    float sz = 1.0 - tz;
+    
+    float d00 = sx * sy * sz;
+    float d01 = sx * sy * tz;
+    float d10 = tx * sy * sz;
+    float d11 = tx * sy * tz;
+    float d20 = tx * ty * sz;
+    float d21 = tx * ty * tz;
+    float d30 = sx * ty * sz;
+    float d31 = sx * ty * tz;
+    
+    int nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    int nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    int nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    int nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    int nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    int nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    int nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    int nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    float pv = particleVelocities[id.x].x;
+    int pv_int = (int) (pv * 1000000.0f);
+    
+    // Add to grid
+    InterlockedAdd(cellVelocitiesInt[nr00].x, (int) (pv_int * d00));
+    InterlockedAdd(cellVelocitiesInt[nr01].x, (int) (pv_int * d01));
+    InterlockedAdd(cellVelocitiesInt[nr10].x, (int) (pv_int * d10));
+    InterlockedAdd(cellVelocitiesInt[nr11].x, (int) (pv_int * d11));
+    InterlockedAdd(cellVelocitiesInt[nr20].x, (int) (pv_int * d20));
+    InterlockedAdd(cellVelocitiesInt[nr21].x, (int) (pv_int * d21));
+    InterlockedAdd(cellVelocitiesInt[nr30].x, (int) (pv_int * d30));
+    InterlockedAdd(cellVelocitiesInt[nr31].x, (int) (pv_int * d31));
+  
+    InterlockedAdd(cellWeightsInt[nr00].x, (int) (d00 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr01].x, (int) (d01 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr10].x, (int) (d10 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr11].x, (int) (d11 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr20].x, (int) (d20 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr21].x, (int) (d21 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr30].x, (int) (d30 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr31].x, (int) (d31 * 1000000.0f));
+    
+    // For the v component
+    dx = 0.5 * _h;
+    dy = 0.0;
+    dz = 0.5 * _h;
+    
+    x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    x1 = (int) min(x0 + 1.0, _fNumX - 2);
+    tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    
+    y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    y1 = (int) min(y0 + 1.0, _fNumY - 2);
+    ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    
+    z0 = (int) min(floor((z_p - dz) * _fInvSpacing), _fNumZ - 2);
+    z1 = (int) min(z0 + 1.0, _fNumZ - 2);
+    tz = ((z_p - dz) - z0 * _h) * _fInvSpacing;
+    
+    sx = 1.0 - tx;
+    sy = 1.0 - ty;
+    sz = 1.0 - tz;
+    
+    d00 = sx * sy * sz;
+    d01 = sx * sy * tz;
+    d10 = tx * sy * sz;
+    d11 = tx * sy * tz;
+    d20 = tx * ty * sz;
+    d21 = tx * ty * tz;
+    d30 = sx * ty * sz;
+    d31 = sx * ty * tz;
+    
+    nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    pv = particleVelocities[id.x].y;
+    pv_int = (int) (pv * 1000000.0f);
+
+    // Add to grid
+    InterlockedAdd(cellVelocitiesInt[nr00].y, (int) (pv_int * d00));
+    InterlockedAdd(cellVelocitiesInt[nr01].y, (int) (pv_int * d01));
+    InterlockedAdd(cellVelocitiesInt[nr10].y, (int) (pv_int * d10));
+    InterlockedAdd(cellVelocitiesInt[nr11].y, (int) (pv_int * d11));
+    InterlockedAdd(cellVelocitiesInt[nr20].y, (int) (pv_int * d20));
+    InterlockedAdd(cellVelocitiesInt[nr21].y, (int) (pv_int * d21));
+    InterlockedAdd(cellVelocitiesInt[nr30].y, (int) (pv_int * d30));
+    InterlockedAdd(cellVelocitiesInt[nr31].y, (int) (pv_int * d31));
+  
+    InterlockedAdd(cellWeightsInt[nr00].y, (int) (d00 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr01].y, (int) (d01 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr10].y, (int) (d10 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr11].y, (int) (d11 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr20].y, (int) (d20 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr21].y, (int) (d21 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr30].y, (int) (d30 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr31].y, (int) (d31 * 1000000.0f));
+    
+    // For the w component
+    dx = 0.5 * _h;
+    dy = 0.0 * _h;
+    dz = 0.5;
+    
+    x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    x1 = (int) min(x0 + 1.0, _fNumX - 2);
+    
+    y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    y1 = (int) min(y0 + 1.0, _fNumY - 2);
+    
+    z0 = (int) min(floor((z_p - dz) * _fInvSpacing), _fNumZ - 2);
+    z1 = (int) min(z0 + 1.0, _fNumZ - 2);
+    tz = ((z_p - dz) - z0 * _h) * _fInvSpacing;
+    
+    sx = 1.0 - tx;
+    sy = 1.0 - ty;
+    sz = 1.0 - tz;
+    
+    d00 = sx * sy * sz;
+    d01 = sx * sy * tz;
+    d10 = tx * sy * sz;
+    d11 = tx * sy * tz;
+    d20 = tx * ty * sz;
+    d21 = tx * ty * tz;
+    d30 = sx * ty * sz;
+    d31 = sx * ty * tz;
+    
+    nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    pv = particleVelocities[id.x].y;
+    pv_int = (int) (pv * 1000000.0f);
+
+        
+    // Add to grid
+    InterlockedAdd(cellVelocitiesInt[nr00].z, (int) (pv_int * d00));
+    InterlockedAdd(cellVelocitiesInt[nr01].z, (int) (pv_int * d01));
+    InterlockedAdd(cellVelocitiesInt[nr10].z, (int) (pv_int * d10));
+    InterlockedAdd(cellVelocitiesInt[nr11].z, (int) (pv_int * d11));
+    InterlockedAdd(cellVelocitiesInt[nr20].z, (int) (pv_int * d20));
+    InterlockedAdd(cellVelocitiesInt[nr21].z, (int) (pv_int * d21));
+    InterlockedAdd(cellVelocitiesInt[nr30].z, (int) (pv_int * d30));
+    InterlockedAdd(cellVelocitiesInt[nr31].z, (int) (pv_int * d31));
+  
+    InterlockedAdd(cellWeightsInt[nr00].z, (int) (d00 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr01].z, (int) (d01 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr10].z, (int) (d10 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr11].z, (int) (d11 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr20].z, (int) (d20 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr21].z, (int) (d21 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr30].z, (int) (d30 * 1000000.0f));
+    InterlockedAdd(cellWeightsInt[nr31].z, (int) (d31 * 1000000.0f));
+}
+
+[numthreads(64, 1, 1)]
+void convert_velocity_and_weight_to_float(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x].x = ((float) cellVelocitiesInt[id.x].x) / 1000000.0f;
+    cellVelocities[id.x].y = ((float) cellVelocitiesInt[id.x].y) / 1000000.0f;
+    cellVelocities[id.x].z = ((float) cellVelocitiesInt[id.x].z) / 1000000.0f;
+
+    cellWeights[id.x].x = ((float) cellWeightsInt[id.x].x) / 1000000.0f;
+    cellWeights[id.x].y = ((float) cellWeightsInt[id.x].y) / 1000000.0f;
+    cellWeights[id.x].z = ((float) cellWeightsInt[id.x].z) / 1000000.0f;
+}
+
+
+[numthreads(64, 1, 1)]
+void avg_cell_velocities(uint3 id : SV_DispatchThreadID)
+{
+    if (cellWeights[id.x].x > 0.0001)
+    {
+        cellVelocities[id.x].x = cellVelocities[id.x].x / cellWeights[id.x].x;
+    }
+    if (cellWeights[id.x].y > 0.0001)
+    {
+        cellVelocities[id.x].y = cellVelocities[id.x].y / cellWeights[id.x].y;
+    }
+    if (cellWeights[id.x].z > 0.0001)
+    {
+        cellVelocities[id.x].z = cellVelocities[id.x].z / cellWeights[id.x].z;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void restore_solid_cells(uint3 id : SV_DispatchThreadID)
+{
+    bool solid = cellTypes[id.x] == SOLID_CELL;
+    int x = id.x / (_fNumY * _fNumZ);
+    int rem = id.x % (_fNumY * _fNumZ);
+    int y = rem / _fNumZ;
+    int z = rem % _fNumZ;
+    if (solid || (x > 0 && cellTypes[id.x - _fNumY * _fNumZ] == SOLID_CELL) || (x < _fNumX - 1 && cellTypes[id.x + _fNumY * _fNumZ] == SOLID_CELL))
+    {
+        cellVelocities[id.x].x = prevCellVelocities[id.x].x;
+    }
+    if (solid || (y > 0 && cellTypes[id.x - _fNumZ] == SOLID_CELL) || (y < _fNumY - 1 && cellTypes[id.x + _fNumY] == SOLID_CELL))
+    {
+        cellVelocities[id.x].y = prevCellVelocities[id.x].y;
+    }
+    if (solid || (z > 0 && cellTypes[id.x - 1] == SOLID_CELL) || (z < _fNumZ - 1 && cellTypes[id.x + 1] == SOLID_CELL))
+    {
+        cellVelocities[id.x].z = prevCellVelocities[id.x].z;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void reset_particle_densities(uint3 id : SV_DispatchThreadID)
+{
+    particleDensity[id.x] = 0;
+}
+
+[numthreads(64, 1, 1)]
+void update_particle_densities(uint3 id : SV_DispatchThreadID)
+{
+    float h2 = 0.5 * _h;
+    
+    // given some point...
+    float x_p = particlePositions[id.x].x;
+    float y_p = particlePositions[id.x].y;
+    float z_p = particlePositions[id.x].z;
+    
+    x_p = clamp(x_p, _h, (_fNumX - 1) * _h);
+    y_p = clamp(y_p, _h, (_fNumY - 1) * _h);
+    z_p = clamp(z_p, _h, (_fNumZ - 1) * _h);
+    
+    int x0 = (int) floor((x_p - h2) * _fInvSpacing);
+    float tx = ((x_p - h2) - x0 * _h) * _fInvSpacing;
+    int x1 = (int) min(x0 + 1, _fNumX - 2);
+    
+    int y0 = (int) floor((y_p - h2) * _fInvSpacing);
+    float ty = ((y_p - h2) - y0 * _h) * _fInvSpacing;
+    int y1 = (int) min(y0 + 1, _fNumY - 2);
+    
+    int z0 = (int) floor((z_p - h2) * _fInvSpacing);
+    float tz = ((z_p - h2) - z0 * _h) * _fInvSpacing;
+    int z1 = (int) min(z0 + 1, _fNumZ - 2);
+    
+    float sx = 1.0 - tx;
+    float sy = 1.0 - ty;
+    float sz = 1.0 - tz;
+    
+    int nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    int nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    int nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    int nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    int nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    int nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    int nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    int nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    if (x0 < (int) _fNumX && y0 < (int) _fNumY && z0 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr00], (int) (sx * sy * sz * 100000.0f));
+    }
+    if (x1 < (int) _fNumX && y0 < (int) _fNumY && z0 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr10], (int) (tx * sy * sz * 100000.0f));
+    }
+    if (x1 < (int) _fNumX && y1 < (int) _fNumY && z0 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr20], (int) (tx * ty * sz * 100000.0f));
+    }
+    if (x0 < (int) _fNumX && y1 < (int) _fNumY && z0 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr30], (int) (sx * ty * sz * 100000.0f));
+    }
+    if (x0 < (int) _fNumX && y0 < (int) _fNumY && z1 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr01], (int) (sx * sy * tz * 100000.0f));
+    }
+    if (x1 < (int) _fNumX && y0 < (int) _fNumY && z1 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr11], (int) (tx * sy * tz * 100000.0f));
+    }
+    if (x1 < (int) _fNumX && y1 < (int) _fNumY && z1 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr21], (int) (tx * ty * tz * 100000.0f));
+    }
+    if (x0 < (int) _fNumX && y1 < (int) _fNumY && z1 < (int) _fNumZ)
+    {
+        InterlockedAdd(particleDensity[nr31], (int) (sx * ty * tz * 100000.0f));
+    }
+}
+
+[numthreads(64, 1, 1)]
+void calc_particle_rest_density_pt1(uint3 id : SV_DispatchThreadID)
+{
+    if (cellTypes[id.x] == FLUID_CELL)
+    {
+        InterlockedAdd(densitySumAndNumFluid[0].x, particleDensity[id.x]);
+        InterlockedAdd(densitySumAndNumFluid[0].y, 1);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void calc_particle_rest_density_pt2(uint3 id : SV_DispatchThreadID)
+{
+    _particleRestDensity = (((float) densitySumAndNumFluid[0].x) / 100000.0f) / (float) densitySumAndNumFluid[0].y;
+}
+
+[numthreads(64, 1, 1)]
+void reset_projection_updates(uint3 id : SV_DispatchThreadID)
+{
+    projectionUpdates[id.x].x = 0;
+    projectionUpdates[id.x].y = 0;
+    projectionUpdates[id.x].z = 0;
+
+}
+
+[numthreads(64, 1, 1)]
+void convert_velocity_to_int(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocitiesInt[id.x].x = (int) (cellVelocities[id.x].x * 1000000.0f);
+    cellVelocitiesInt[id.x].y = (int) (cellVelocities[id.x].y * 1000000.0f);
+}
+
+[numthreads(64, 1, 1)]
+void convert_velocity_to_float(uint3 id : SV_DispatchThreadID)
+{
+    cellVelocities[id.x].x = ((float) cellVelocitiesInt[id.x].x) / 1000000.0f;
+    cellVelocities[id.x].y = ((float) cellVelocitiesInt[id.x].y) / 1000000.0f;
+}
+
+
+[numthreads(64, 1, 1)]
+void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
+{
+    uint center = id.x;
+    if (cellTypes[center] == FLUID_CELL)
+    {
+        
+        uint left = center - _fNumY * _fNumZ;
+        uint right = center + _fNumY * _fNumZ;
+        uint bottom = center - _fNumZ;
+        uint top = center + _fNumZ;
+        uint infront = center - 1;
+        uint behind = center + 1;
+        
+        int sx0 = cellIsSolid[left];
+        int sx1 = cellIsSolid[right];
+        int sy0 = cellIsSolid[bottom];
+        int sy1 = cellIsSolid[top];
+        int sz0 = cellIsSolid[infront];
+        int sz1 = cellIsSolid[behind];
+        
+        int s = sx0 + sx1 + sy0 + sy1+ sz0 + sz1;
+        
+        if (s != 0)
+        {
+            //float div = cellVelocitiesInt[right].x - cellVelocitiesInt[center].x +
+            //            cellVelocitiesInt[top].y - cellVelocitiesInt[center].y; 
+            float div = cellVelocities[right].x - cellVelocities[center].x +
+                        cellVelocities[top].y - cellVelocities[center].y + 
+                        cellVelocities[behind].z - cellVelocities[center].z;
+            
+            if (_particleRestDensity > 0.0)
+            {
+                float rest = _particleRestDensity;
+                //if (center % _fNumY <= )
+                //{
+                //    rest *= 6;
+                //}
+                
+                float k = 1;
+                float compression = ((float) particleDensity[center]) / 100000.0f - rest;
+                if (compression > 0.0)
+                    div = div - k * compression;
+            }
+
+            
+            float p = -1 * div / s;
+            p *= _overrelaxation;
+            
+            //InterlockedAdd(cellVelocitiesInt[center].x, -1 * (int) (p * sx0 * 1000000.0f));
+            //InterlockedAdd(cellVelocitiesInt[right].x, (int) (p * sx1 * 1000000.0f));
+            //InterlockedAdd(cellVelocitiesInt[center].y, -1 * (int) (p * sy0 * 1000000.0f));
+            //InterlockedAdd(cellVelocitiesInt[top].y, (int) (p * sy1 * 1000000.0f));
+            
+            InterlockedAdd(projectionUpdates[center].x, -1 * (int) (1000000.0f * sx0 * p));
+            InterlockedAdd(projectionUpdates[right].x, (int) (1000000.0f * sx1 * p));
+            InterlockedAdd(projectionUpdates[center].y, -1 * (int) (1000000.0f * sy0 * p));
+            InterlockedAdd(projectionUpdates[top].y, (int) (1000000.0f * sy1 * p));            
+            InterlockedAdd(projectionUpdates[center].z, -1 * (int) (1000000.0f * sz0 * p));
+            InterlockedAdd(projectionUpdates[behind].z, (int) (1000000.0f * sz1 * p));
+        }
+    }
+}
+
+[numthreads(64, 1, 1)]
+void add_projection_to_velocities(uint3 id : SV_DispatchThreadID)
+{
+    float scale = .15;
+
+    //if (_particleRestDensity > 0)
+    //{
+    //    scale = _timeStep / (_particleRestDensity * _h);
+    //}
+
+    cellVelocities[id.x].x += (((float) projectionUpdates[id.x].x) / 1000000.0f) * scale;
+    cellVelocities[id.x].y += (((float) projectionUpdates[id.x].y) / 1000000.0f) * scale;
+    cellVelocities[id.x].z += (((float) projectionUpdates[id.x].z) / 1000000.0f) * scale;
+}
+
+[numthreads(64, 1, 1)]
+void grid_to_particle(uint3 id : SV_DispatchThreadID)
+{
+    // given some point...
+    float x_p = particlePositions[id.x].x;
+    float y_p = particlePositions[id.x].y;
+    float z_p = particlePositions[id.x].z;
+    
+    x_p = clamp(x_p, _h, (_fNumX - 1) * _h);
+    y_p = clamp(y_p, _h, (_fNumY - 1) * _h);
+    z_p = clamp(z_p, _h, (_fNumZ - 1) * _h);
+
+    // Set velocities and weights to 0.
+        // Done in prevous compute call
+    
+    // For the u component...   
+    float dx = 0.0;
+    float dy = 0.5 * _h;
+    float dz = 0.5 * _h;
+    
+    
+    int x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    int x1 = (int) min(x0 + 1.0, _fNumX - 2);
+    float tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    
+    int y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    int y1 = (int) min(y0 + 1.0, _fNumY - 2);
+    float ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    
+    int z0 = (int) min(floor((z_p - dz) * _fInvSpacing), _fNumZ - 2);
+    int z1 = (int) min(z0 + 1.0, _fNumZ - 2);
+    float tz = ((z_p - dz) - z0 * _h) * _fInvSpacing;
+    
+    
+        
+    float sx = 1.0 - tx;
+    float sy = 1.0 - ty;
+    float sz = 1.0 - tz;
+    
+    float d00 = sx * sy * sz;
+    float d01 = sx * sy * tz;
+    float d10 = tx * sy * sz;
+    float d11 = tx * sy * tz;
+    float d20 = tx * ty * sz;
+    float d21 = tx * ty * tz;
+    float d30 = sx * ty * sz;
+    float d31 = sx * ty * tz;
+    
+    int nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    int nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    int nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    int nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    int nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    int nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    int nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    int nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    
+    int valid00 = (cellTypes[nr00] != AIR_CELL || cellTypes[nr00 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid01 = (cellTypes[nr01] != AIR_CELL || cellTypes[nr01 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid10 = (cellTypes[nr10] != AIR_CELL || cellTypes[nr10 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid11 = (cellTypes[nr11] != AIR_CELL || cellTypes[nr11 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid20 = (cellTypes[nr20] != AIR_CELL || cellTypes[nr20 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid21 = (cellTypes[nr21] != AIR_CELL || cellTypes[nr21 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid30 = (cellTypes[nr30] != AIR_CELL || cellTypes[nr30 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    int valid31 = (cellTypes[nr31] != AIR_CELL || cellTypes[nr31 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    
+    float v = particleVelocities[id.x].x;
+    float d = valid00 * d00 + valid10 * d10 + valid20 * d20 + valid30 * d30 + 
+              valid01 * d01 + valid11 * d11 + valid21 * d21 + valid31 * d31;
+    
+    if (d > 0.0)
+    {
+        float picU = (valid00 * d00 * cellVelocities[nr00].x) +
+                     (valid10 * d10 * cellVelocities[nr10].x) +
+                     (valid20 * d20 * cellVelocities[nr20].x) +
+                     (valid30 * d30 * cellVelocities[nr30].x) + 
+                     (valid01 * d01 * cellVelocities[nr01].x) +
+                     (valid11 * d11 * cellVelocities[nr11].x) +
+                     (valid21 * d21 * cellVelocities[nr21].x) +
+                     (valid31 * d31 * cellVelocities[nr31].x);
+        
+        float diffU = (valid00 * d00 * (cellVelocities[nr00].x - prevCellVelocities[nr00].x)) +
+                      (valid10 * d10 * (cellVelocities[nr10].x - prevCellVelocities[nr10].x)) +
+                      (valid20 * d20 * (cellVelocities[nr20].x - prevCellVelocities[nr20].x)) +
+                      (valid30 * d30 * (cellVelocities[nr30].x - prevCellVelocities[nr30].x)) + 
+                      (valid01 * d01 * (cellVelocities[nr01].x - prevCellVelocities[nr01].x)) +
+                      (valid11 * d11 * (cellVelocities[nr11].x - prevCellVelocities[nr11].x)) +
+                      (valid21 * d21 * (cellVelocities[nr21].x - prevCellVelocities[nr21].x)) +
+                      (valid31 * d31 * (cellVelocities[nr31].x - prevCellVelocities[nr31].x));
+        
+        picU /= d;
+        diffU /= d;
+        
+        float flipU = v + diffU;
+
+        particleVelocities[id.x].x = (1 - _flipRatio) * picU + _flipRatio * flipU;
+        //if (_mouseDown && abs(_mouseCellY - y0) < 2 && abs(_mouseCellX - x0) < 2)
+        //{
+        //    particleVelocities[id.x].x += 25 * _mouseVelocityX;
+        //}
+    }
+    
+    // For the v component...   
+    dx = 0.5 * _h;
+    dy = 0.0;
+    dz = 0.5 * _h;
+    
+    x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    x1 = (int) min(x0 + 1.0, _fNumX - 2);
+    
+    y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    y1 = (int) min(y0 + 1.0, _fNumY - 2);
+    
+    z0 = (int) min(floor((z_p - dz) * _fInvSpacing), _fNumZ - 2);
+    z1 = (int) min(z0 + 1.0, _fNumZ - 2);
+    tz = ((z_p - dz) - z0 * _h) * _fInvSpacing;
+    
+    sx = 1.0 - tx;
+    sy = 1.0 - ty;
+    sz = 1.0 - tz;
+    
+    d00 = sx * sy * sz;
+    d01 = sx * sy * tz;
+    d10 = tx * sy * sz;
+    d11 = tx * sy * tz;
+    d20 = tx * ty * sz;
+    d21 = tx * ty * tz;
+    d30 = sx * ty * sz;
+    d31 = sx * ty * tz;
+    
+    nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    valid00 = (cellTypes[nr00] != AIR_CELL || cellTypes[nr00 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid01 = (cellTypes[nr01] != AIR_CELL || cellTypes[nr01 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid10 = (cellTypes[nr10] != AIR_CELL || cellTypes[nr10 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid11 = (cellTypes[nr11] != AIR_CELL || cellTypes[nr11 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid20 = (cellTypes[nr20] != AIR_CELL || cellTypes[nr20 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid21 = (cellTypes[nr21] != AIR_CELL || cellTypes[nr21 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid30 = (cellTypes[nr30] != AIR_CELL || cellTypes[nr30 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid31 = (cellTypes[nr31] != AIR_CELL || cellTypes[nr31 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    
+    v = particleVelocities[id.x].y;
+    d = valid00 * d00 + valid10 * d10 + valid20 * d20 + valid30 * d30 +
+              valid01 * d01 + valid11 * d11 + valid21 * d21 + valid31 * d31;
+    if (d > 0.0)
+    {
+        float picV = (valid00 * d00 * cellVelocities[nr00].y) +
+                     (valid10 * d10 * cellVelocities[nr10].y) +
+                     (valid20 * d20 * cellVelocities[nr20].y) +
+                     (valid30 * d30 * cellVelocities[nr30].y) +
+                     (valid01 * d01 * cellVelocities[nr01].y) +
+                     (valid11 * d11 * cellVelocities[nr11].y) +
+                     (valid21 * d21 * cellVelocities[nr21].y) +
+                     (valid31 * d31 * cellVelocities[nr31].y);
+        
+        float diffV = (valid00 * d00 * (cellVelocities[nr00].y - prevCellVelocities[nr00].y)) +
+                      (valid10 * d10 * (cellVelocities[nr10].y - prevCellVelocities[nr10].y)) +
+                      (valid20 * d20 * (cellVelocities[nr20].y - prevCellVelocities[nr20].y)) +
+                      (valid30 * d30 * (cellVelocities[nr30].y - prevCellVelocities[nr30].y)) +
+                      (valid01 * d01 * (cellVelocities[nr01].y - prevCellVelocities[nr01].y)) +
+                      (valid11 * d11 * (cellVelocities[nr11].y - prevCellVelocities[nr11].y)) +
+                      (valid21 * d21 * (cellVelocities[nr21].y - prevCellVelocities[nr21].y)) +
+                      (valid31 * d31 * (cellVelocities[nr31].y - prevCellVelocities[nr31].y));
+        
+        picV /= d;
+        diffV /= d;
+        
+        float flipV = v + diffV;
+        
+        particleVelocities[id.x].y = (1 - _flipRatio) * picV + _flipRatio * flipV;
+        //if (_mouseDown && abs(_mouseCellY - y0) < 2 && abs(_mouseCellX - x0) < 2)
+        //{
+        //    particleVelocities[id.x].y += 25 * _mouseVelocityY;
+        //}
+    }
+    
+    // For the w component...   
+    dx = 0.5 * _h;
+    dy = 0.5 * _h;
+    dz = 0;
+    
+    x0 = (int) min(floor((x_p - dx) * _fInvSpacing), _fNumX - 2);
+    x1 = (int) min(x0 + 1.0, _fNumX - 2);
+    tx = ((x_p - dx) - x0 * _h) * _fInvSpacing;
+    
+    y0 = (int) min(floor((y_p - dy) * _fInvSpacing), _fNumY - 2);
+    y1 = (int) min(y0 + 1.0, _fNumY - 2);
+    ty = ((y_p - dy) - y0 * _h) * _fInvSpacing;
+    
+    z0 = (int) min(floor((z_p - dz) * _fInvSpacing), _fNumZ - 2);
+    z1 = (int) min(z0 + 1.0, _fNumZ - 2);
+    tz = ((z_p - dz) - z0 * _h) * _fInvSpacing;
+    
+    sx = 1.0 - tx;
+    sy = 1.0 - ty;
+    sz = 1.0 - tz;
+    
+    d00 = sx * sy * sz;
+    d01 = sx * sy * tz;
+    d10 = tx * sy * sz;
+    d11 = tx * sy * tz;
+    d20 = tx * ty * sz;
+    d21 = tx * ty * tz;
+    d30 = sx * ty * sz;
+    d31 = sx * ty * tz;
+    
+    nr00 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr01 = (x0 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr10 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z0;
+    nr11 = (x1 * _fNumY * _fNumZ) + y0 * _fNumZ + z1;
+    nr20 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr21 = (x1 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    nr30 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z0;
+    nr31 = (x0 * _fNumY * _fNumZ) + y1 * _fNumZ + z1;
+    
+    valid00 = (cellTypes[nr00] != AIR_CELL || cellTypes[nr00 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid01 = (cellTypes[nr01] != AIR_CELL || cellTypes[nr01 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid10 = (cellTypes[nr10] != AIR_CELL || cellTypes[nr10 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid11 = (cellTypes[nr11] != AIR_CELL || cellTypes[nr11 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid20 = (cellTypes[nr20] != AIR_CELL || cellTypes[nr20 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid21 = (cellTypes[nr21] != AIR_CELL || cellTypes[nr21 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid30 = (cellTypes[nr30] != AIR_CELL || cellTypes[nr30 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    valid31 = (cellTypes[nr31] != AIR_CELL || cellTypes[nr31 - _fNumY] != AIR_CELL) ? 1.0 : 0.0;
+    
+    float w = particleVelocities[id.x].z;
+    d = valid00 * d00 + valid10 * d10 + valid20 * d20 + valid30 * d30 +
+              valid01 * d01 + valid11 * d11 + valid21 * d21 + valid31 * d31;
+    if (d > 0.0)
+    {
+        float picW = (valid00 * d00 * cellVelocities[nr00].z) +
+                     (valid10 * d10 * cellVelocities[nr10].z) +
+                     (valid20 * d20 * cellVelocities[nr20].z) +
+                     (valid30 * d30 * cellVelocities[nr30].z) +
+                     (valid01 * d01 * cellVelocities[nr01].z) +
+                     (valid11 * d11 * cellVelocities[nr11].z) +
+                     (valid21 * d21 * cellVelocities[nr21].z) +
+                     (valid31 * d31 * cellVelocities[nr31].z);
+        
+        float diffW = (valid00 * d00 * (cellVelocities[nr00].z - prevCellVelocities[nr00].z)) +
+                      (valid10 * d10 * (cellVelocities[nr10].z - prevCellVelocities[nr10].z)) +
+                      (valid20 * d20 * (cellVelocities[nr20].z - prevCellVelocities[nr20].z)) +
+                      (valid30 * d30 * (cellVelocities[nr30].z - prevCellVelocities[nr30].z)) +
+                      (valid01 * d01 * (cellVelocities[nr01].z - prevCellVelocities[nr01].z)) +
+                      (valid11 * d11 * (cellVelocities[nr11].z - prevCellVelocities[nr11].z)) +
+                      (valid21 * d21 * (cellVelocities[nr21].z - prevCellVelocities[nr21].z)) +
+                      (valid31 * d31 * (cellVelocities[nr31].z - prevCellVelocities[nr31].z));
+        
+        picW /= d;
+        diffW /= d;
+        
+        float flipW = w + diffW;
+        
+        particleVelocities[id.x].z = (1 - _flipRatio) * picW + _flipRatio * flipW;
+        //if (_mouseDown && abs(_mouseCellY - y0) < 2 && abs(_mouseCellX - x0) < 2)
+        //{
+        //    particleVelocities[id.x].y += 25 * _mouseVelocityY;
+        //}
+    }
+}
+
+

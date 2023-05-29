@@ -522,7 +522,7 @@ public class Main : MonoBehaviour
         //xdd = Instantiate(fluidCellPrefab, new Vector3(_h * (x0 + 1f), _h * (y0 + 1f), 0), Quaternion.identity);
 
         _compute.SetFloat("_timeStep", 2 * Time.deltaTime);
-        //_compute.SetFloat("_timeStep", 1f / 120f);
+        //_compute.SetFloat("_timeStep", 1f / 250f);
 
         Debug.DrawLine(new Vector3(0,0, 0), new Vector3(0, _simHeight + _h/2, 0), Color.gray);
         Debug.DrawLine(new Vector3(0, 0, 0), new Vector3(_simWidth +0, 0, 0), Color.gray);
@@ -543,7 +543,7 @@ public class Main : MonoBehaviour
         _compute.Dispatch(_convert_velocity_and_weight_to_float, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_avg_cell_velocities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_restore_solid_cells, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
-        // Update Density
+        //// Update Density
         _compute.Dispatch(_reset_particle_densities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         _compute.Dispatch(_update_particle_densities, Mathf.CeilToInt(_numParticles / 64f), 1, 1);
         if (xd == 0)
@@ -556,7 +556,7 @@ public class Main : MonoBehaviour
 
             xd++;
         }
-        // Solve for incompressibility
+        //// Solve for incompressibility
         _compute.Dispatch(_copy_prev_velocities, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
         for (int iter = 0; iter < _solveIterations; iter++)
         {
