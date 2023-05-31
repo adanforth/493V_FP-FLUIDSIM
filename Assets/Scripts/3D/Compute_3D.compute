@@ -74,7 +74,7 @@ RWStructuredBuffer<int3> cellVelocitiesInt;
 RWStructuredBuffer<int> particleDensity;
 RWStructuredBuffer<int3> projectionUpdates;
 
-RWStructuredBuffer<int2> densitySumAndNumFluid;
+RWStructuredBuffer<uint2> densitySumAndNumFluid;
 
 float _width;
 float _height;
@@ -99,9 +99,9 @@ float _particleRestDensity;
 float _overrelaxation;
 
 // cell states
-float FLUID_CELL;
-float AIR_CELL;
-float SOLID_CELL;
+int FLUID_CELL;
+int AIR_CELL;
+int SOLID_CELL;
 
 // for boundaries
 float _minX;
@@ -479,10 +479,10 @@ void avg_cell_velocities(uint3 id : SV_DispatchThreadID)
 void restore_solid_cells(uint3 id : SV_DispatchThreadID)
 {
     bool solid = cellTypes[id.x] == SOLID_CELL;
-    int x = id.x / (_fNumY * _fNumZ);
+    uint x = id.x / (_fNumY * _fNumZ);
     int rem = id.x % (_fNumY * _fNumZ);
-    int y = rem / _fNumZ;
-    int z = rem % _fNumZ;
+    uint y = rem / _fNumZ;
+    uint z = rem % _fNumZ;
     if (solid || (x > 0 && cellTypes[id.x - _fNumY * _fNumZ] == SOLID_CELL) || (x < _fNumX - 1 && cellTypes[id.x + _fNumY * _fNumZ] == SOLID_CELL))
     {
         cellVelocities[id.x].x = prevCellVelocities[id.x].x;
@@ -589,7 +589,7 @@ void calc_particle_rest_density_pt1(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void calc_particle_rest_density_pt2(uint3 id : SV_DispatchThreadID)
 {
-    _particleRestDensity = (((float) densitySumAndNumFluid[0].x) / 100000.0f) / (float) densitySumAndNumFluid[0].y;
+    _particleRestDensity = 1.5 * (((float) densitySumAndNumFluid[0].x) / 100000.0f) / (float) densitySumAndNumFluid[0].y;
 }
 
 [numthreads(64, 1, 1)]
@@ -619,6 +619,12 @@ void convert_velocity_to_float(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
 {
+    
+    if (id.x / (_fNumY * _fNumZ) < 1 || id.x / (_fNumZ) < 1 || id.x < 1)
+    {
+        return;
+    }
+    
     uint center = id.x;
     if (cellTypes[center] == FLUID_CELL)
     {

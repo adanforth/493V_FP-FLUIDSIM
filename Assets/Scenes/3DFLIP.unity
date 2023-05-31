@@ -519,14 +519,15 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 6691955925574645823, guid: 78cc2e52aa74ded46802d9cf87e6b736, type: 3}
   bottomPlane: {fileID: 731522172}
   showGrid: 0
-  _solveIterations: 800
+  _solveIterations: 750
   _partcileRadius: 2
-  _timeScale: 1.5
-  _gridCellDensity: 2
+  _timeScale: 1.7
+  _restDensityMult: 3
+  _gridCellDensity: 3
   _simWidth: 20
   _simHeight: 10
   _simDepth: 10
-  _flipRatio: 0.9
+  _flipRatio: 0.85
   relativeWaterHeight: 0.8
   relativeWaterWidth: 0.4
   _compute: {fileID: 7200000, guid: 41975871e8b74b34590908eaf11c0b39, type: 3}

@@ -20,6 +20,7 @@ public class Simulator_3D : MonoBehaviour
     // How large to render - not scaled radius
     [SerializeField] float _partcileRadius = 1;
     [SerializeField] float _timeScale = 1;
+    [SerializeField] float _restDensityMult = 1;
 
 
 
@@ -65,9 +66,9 @@ public class Simulator_3D : MonoBehaviour
     private int _fNumY;
     private int _fNumZ;
     // CELL TYPES
-    private static float FLUID_CELL = 0;
-    private static float AIR_CELL = 1;
-    private static float SOLID_CELL = 2;
+    private static int FLUID_CELL = 0;
+    private static int AIR_CELL = 1;
+    private static int SOLID_CELL = 2;
     // amount of grid cells in the MAC grid
     private int _fNumCells;
 
@@ -140,7 +141,7 @@ public class Simulator_3D : MonoBehaviour
     {
         // Move camera
         cam = Camera.main;
-        cam.transform.position = new Vector3(_simWidth * 1.25f, _simHeight, -_simDepth / 2);
+        cam.transform.position = new Vector3(_simWidth * 1.15f, 1.3f * _simHeight, -_simDepth * .65f);
         cam.transform.LookAt(gameObject.transform.position + new Vector3(_simWidth/2, _simHeight/5, _simDepth / 2));
 
 
@@ -163,13 +164,13 @@ public class Simulator_3D : MonoBehaviour
 
         // Setting up for "Dam Break" init
         float dx = 2.0f * _r;
-        float dy = 2 * _r;
-        float dz = 2 * _r;
+        float dy = 2* _r;
+        float dz = math.sqrt(3) * _r;
 
 
         int numX = (int)math.floor((relativeWaterWidth * _simWidth - 2.0f * h - 2.0f * _r) / dx);
         int numY = (int)math.floor((relativeWaterHeight * _simHeight - 2.0f * h - 2.0f * _r) / dy);
-        int numZ = (int)math.floor((_simDepth  - .5f * h) / dz) + 1;
+        int numZ = (int)math.floor((_simDepth - 2 * h) / dz);
         _numParticles = numX * numY * numZ;
 
         //Debug.Log(_numParticles);
@@ -204,7 +205,7 @@ public class Simulator_3D : MonoBehaviour
                 {
                     _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
                     _initParticlePositions[pInd].y = _h + _r + dy * j;
-                    _initParticlePositions[pInd].z = _h + _r + dz * k + (j % 2 == 0 ? 0.0f : _r);
+                    _initParticlePositions[pInd].z = _h + _r + dz * k;
                     pInd++;
                 }
             }
@@ -348,7 +349,7 @@ public class Simulator_3D : MonoBehaviour
         _cellProjectionUpdatesBuffer = new ComputeBuffer(_fNumCells, 12);
 
         _densitySumAndNumFluidBuffer = new ComputeBuffer(1, 8);
-        _densitySumAndNumFluidBuffer.SetData(new int2[1]);
+        _densitySumAndNumFluidBuffer.SetData(new uint2[1]);
 
         // Set buffer for mesh properties to be shared by compute shader and instance renderer.
         _compute.SetBuffer(_render_particles, "meshProperties", _meshPropertiesBuffer);
@@ -468,9 +469,9 @@ public class Simulator_3D : MonoBehaviour
         _compute.SetFloat("_maxY", (_fNumY) * _h - _r);
         _compute.SetFloat("_minZ", _h + _r);
         _compute.SetFloat("_maxZ", (_fNumZ) * _h - _r);
-        _compute.SetFloat("FLUID_CELL", FLUID_CELL);
-        _compute.SetFloat("AIR_CELL", AIR_CELL);
-        _compute.SetFloat("SOLID_CELL", SOLID_CELL);
+        _compute.SetInt("FLUID_CELL", FLUID_CELL);
+        _compute.SetInt("AIR_CELL", AIR_CELL);
+        _compute.SetInt("SOLID_CELL", SOLID_CELL);
         _compute.SetFloat("_overrelaxation", 1.95f);
         //_compute.SetFloat("_timeStep", 1.0f / 120.0f);
         _compute.SetFloat("_flipRatio", _flipRatio);
@@ -587,11 +588,11 @@ public class Simulator_3D : MonoBehaviour
         if (xd == 0)
         {
             _compute.Dispatch(_calc_particle_rest_density_pt1, Mathf.CeilToInt(_fNumCells / 64f), 1, 1);
-            int2[] densitySumAndNumFluid = new int2[1];
+            uint2[] densitySumAndNumFluid = new uint2[1];
 
             _densitySumAndNumFluidBuffer.GetData(densitySumAndNumFluid);
-            _compute.SetFloat("_particleRestDensity", ((float)densitySumAndNumFluid[0].x / 100000.0f) / densitySumAndNumFluid[0].y);
-
+            _compute.SetFloat("_particleRestDensity", _restDensityMult * ((float)densitySumAndNumFluid[0].x / 100000.0f) / densitySumAndNumFluid[0].y);
+            Debug.Log(_restDensityMult * ((float)densitySumAndNumFluid[0].x / 100000.0f) / densitySumAndNumFluid[0].y);
             xd++;
         }
         //// Solve for incompressibility
