@@ -45,6 +45,7 @@
 struct mesh_data
 {
     float4x4 mat;
+    float4 color;
 };
 
 // Particle Information
@@ -142,6 +143,33 @@ void render_particles(uint3 id : SV_DispatchThreadID)
     mat[2][3] = particlePositions[id.x].z - _r;
 
     meshProperties[id.x].mat = mat;
+    
+    float d = .01;
+    meshProperties[id.x].color = float4(clamp(meshProperties[id.x].color.x - d, 0.0, 1.0),
+                                        clamp(meshProperties[id.x].color.y - d, 0.0, 1.0),
+                                        clamp(meshProperties[id.x].color.z + d, 0.0, 1.0),
+                                        1);
+    
+    float x_p = particlePositions[id.x].x;
+    float y_p = particlePositions[id.x].y;
+    float z_p = particlePositions[id.x].z;
+    
+    int x_i = (int) clamp(floor(x_p * _fInvSpacing), 0.0, _fNumX - 1);
+    int y_i = (int) clamp(floor(y_p * _fInvSpacing), 0.0, _fNumY - 1);
+    int z_i = (int) clamp(floor(z_p * _fInvSpacing), 0.0, _fNumZ - 1);
+
+    int cell_nr = (int) (x_i * _fNumY * _fNumZ) + (y_i * _fNumZ) + z_i;
+    
+    if (_particleRestDensity > 0.1 && y_i > _fNumY / (3.2 * clamp(RandomFloat(id.x) + 1, 1, 1.5)))
+    {
+        float relDensity = (particleDensity[cell_nr] / 100000.0f) / (_particleRestDensity);
+        if (relDensity < 0.5)
+        {
+            meshProperties[id.x].color = float4(0.8, 0.8, 1, 1);
+        }
+        
+    }
+
 }
 
 [numthreads(64, 1, 1)]

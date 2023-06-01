@@ -28,6 +28,7 @@ Shader "FLIP/ParticleInstanced"
             struct mesh_data
             {
                 float4x4 mat;
+                float4 color;
             };
 
             struct appdata_t
@@ -51,7 +52,7 @@ Shader "FLIP/ParticleInstanced"
                 const float4 pos = mul(data[instance_id].mat, i.vertex);
                 o.vertex = UnityObjectToClipPos(pos);
                 //o.color = lerp(_InactiveColor, _ActiveColor, data[instance_id].amount);
-                o.color = _ActiveColor;
+                o.color = data[instance_id].color;
 
                 return o;
             }

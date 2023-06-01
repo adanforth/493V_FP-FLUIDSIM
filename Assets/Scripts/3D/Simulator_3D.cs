@@ -22,6 +22,9 @@ public class Simulator_3D : MonoBehaviour
     [SerializeField] float _timeScale = 1;
     [SerializeField] float _restDensityMult = 1;
 
+    [SerializeField] Color _baseParticleColor;
+    [SerializeField] Color _fastParticleColor;
+
 
 
     private Vector3 _curMousePos;
@@ -32,6 +35,13 @@ public class Simulator_3D : MonoBehaviour
     private struct Mesh_Data
     {
         public Matrix4x4 mat;
+        public Color color;
+
+        public Mesh_Data(Matrix4x4 _mat, Color _color)
+        {
+            mat = _mat;
+            color = _color;
+        }
     };
 
     // GLOBAL PARAMETERS
@@ -216,7 +226,7 @@ public class Simulator_3D : MonoBehaviour
             var pos = _initParticlePositions[i];
             var rot = Quaternion.identity;
 
-            _initParticleMatricies[i] = new Mesh_Data { mat = Matrix4x4.TRS(pos, rot, _particleScale) };
+            _initParticleMatricies[i] = new Mesh_Data(Matrix4x4.TRS(pos, rot, _particleScale), _baseParticleColor);
         }
 
         setSolidCells();
@@ -326,7 +336,7 @@ public class Simulator_3D : MonoBehaviour
 
         _particleVelocitiesBuffer = new ComputeBuffer(_numParticles, 12);
 
-        _meshPropertiesBuffer = new ComputeBuffer(_numParticles, 64);
+        _meshPropertiesBuffer = new ComputeBuffer(_numParticles, 64 + 16);
         _meshPropertiesBuffer.SetData(_initParticleMatricies);
 
         _cellIsSolidBuffer = new ComputeBuffer(_fNumCells, 4);
@@ -354,6 +364,7 @@ public class Simulator_3D : MonoBehaviour
         // Set buffer for mesh properties to be shared by compute shader and instance renderer.
         _compute.SetBuffer(_render_particles, "meshProperties", _meshPropertiesBuffer);
         _compute.SetBuffer(_render_particles, "particlePositions", _particlePositionsBuffer);
+        _compute.SetBuffer(_render_particles, "particleDensity", _particleDensityBuffer);
         _instanceMaterial.SetBuffer("data", _meshPropertiesBuffer);
 
         // Set particle pos and vel for integrate
