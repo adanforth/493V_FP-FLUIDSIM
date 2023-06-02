@@ -62,7 +62,7 @@ float _numSubSteps;
 // Grid Stuff
 // Cell type stuff
 RWStructuredBuffer<float> cellTypes;
-StructuredBuffer<float> cellIsSolid;
+StructuredBuffer<int> cellIsSolid;
 
 
 RWStructuredBuffer<float3> cellWeights;
@@ -139,7 +139,7 @@ void render_particles(uint3 id : SV_DispatchThreadID)
     float4x4 mat = meshProperties[id.x].mat;
 
     mat[0][3] = particlePositions[id.x].x - _r;
-    mat[1][3] = particlePositions[id.x].y - _r;
+    mat[1][3] = particlePositions[id.x].y + _r;
     mat[2][3] = particlePositions[id.x].z - _r;
 
     meshProperties[id.x].mat = mat;
@@ -163,7 +163,7 @@ void render_particles(uint3 id : SV_DispatchThreadID)
     if (_particleRestDensity > 0.1 && y_i > _fNumY / (3.2 * clamp(RandomFloat(id.x) + 1, 1, 1.5)))
     {
         float relDensity = (particleDensity[cell_nr] / 100000.0f) / (_particleRestDensity);
-        if (relDensity < 0.5)
+        if (relDensity < 0.3)
         {
             meshProperties[id.x].color = float4(0.8, 0.8, 1, 1);
         }
@@ -656,7 +656,6 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
     uint center = id.x;
     if (cellTypes[center] == FLUID_CELL)
     {
-        
         uint left = center - _fNumY * _fNumZ;
         uint right = center + _fNumY * _fNumZ;
         uint bottom = center - _fNumZ;
@@ -671,7 +670,7 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
         int sz0 = cellIsSolid[infront];
         int sz1 = cellIsSolid[behind];
         
-        int s = sx0 + sx1 + sy0 + sy1+ sz0 + sz1;
+        int s = sx0 + sx1 + sy0 + sy1 + sz0 + sz1;
         
         if (s != 0)
         {
@@ -717,7 +716,7 @@ void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void add_projection_to_velocities(uint3 id : SV_DispatchThreadID)
 {
-    float scale = .15;
+    float scale = .175;
 
     //if (_particleRestDensity > 0)
     //{

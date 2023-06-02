@@ -160,12 +160,13 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 8210444231714497919, guid: fad392af1a2f1df49bc2abbbabe404c9, type: 3}
   showGrid: 0
   _solveIterations: 1000
+  _particleColor: {r: 0, g: 0, b: 1, a: 1}
   _gridCellDensity: 4
   _simWidth: 20
   _simHeight: 10
   _flipRatio: 0.95
   relativeWaterHeight: 0.9
-  relativeWaterWidth: 0.3
+  relativeWaterWidth: 0.5
   _compute: {fileID: 7200000, guid: e10385ef8d17c764783affc05aa4f229, type: 3}
 --- !u!4 &19100044
 Transform:
@@ -337,7 +338,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.2735849, g: 0.2735849, b: 0.2735849, a: 0}
+  m_BackGroundColor: {r: 0.18039216, g: 0.1764706, b: 0.18039216, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0

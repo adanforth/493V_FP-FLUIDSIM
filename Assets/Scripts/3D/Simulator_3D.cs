@@ -95,7 +95,7 @@ public class Simulator_3D : MonoBehaviour
     private Mesh_Data[] _initParticleMatricies;
     private float[] _initCellTypes;
     private int2[] _initCellDensityAndNumFluid;
-    private float[] _initSolidCells;
+    private int[] _initSolidCells;
 
 
 
@@ -151,7 +151,7 @@ public class Simulator_3D : MonoBehaviour
     {
         // Move camera
         cam = Camera.main;
-        cam.transform.position = new Vector3(_simWidth * 1.15f, 1.3f * _simHeight, -_simDepth * .65f);
+        cam.transform.position = new Vector3(_simWidth * 1.6f, 1.7f * _simHeight, -_simDepth * .95f);
         cam.transform.LookAt(gameObject.transform.position + new Vector3(_simWidth/2, _simHeight/5, _simDepth / 2));
 
 
@@ -183,6 +183,8 @@ public class Simulator_3D : MonoBehaviour
         int numZ = (int)math.floor((_simDepth - 2 * h) / dz);
         _numParticles = numX * numY * numZ;
 
+        Debug.Log(_numParticles);
+
         //Debug.Log(_numParticles);
         _fNumX = (int)math.floor(_simWidth / h) + 1;
         _fNumY = (int)math.floor(_simHeight / h) + 1;
@@ -196,13 +198,13 @@ public class Simulator_3D : MonoBehaviour
 
         // Init bottom plane
         bottomPlane.transform.position = new Vector3((_simWidth + _h) / 2, _r, (_simDepth + _h)/2);
-        bottomPlane.transform.localScale = new Vector3(_simWidth / 10, 0, _simDepth / 10);
+        bottomPlane.transform.localScale = new Vector3((_simWidth - _h) / 10, 0, _simDepth / 10);
 
 
         // instantiate init arrays
         _initParticlePositions = new float3[_numParticles];
         _initParticleMatricies = new Mesh_Data[_numParticles];
-        _initSolidCells = new float[_fNumCells];
+        _initSolidCells = new int[_fNumCells];
         _initCellTypes = new float[_fNumCells];
 
 
@@ -214,7 +216,7 @@ public class Simulator_3D : MonoBehaviour
                 for (int k = 0; k < numZ; k++)
                 {
                     _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
-                    _initParticlePositions[pInd].y = _h + _r + dy * j;
+                    _initParticlePositions[pInd].y = (_h + _r + dy * j);
                     _initParticlePositions[pInd].z = _h + _r + dz * k;
                     pInd++;
                 }
@@ -316,10 +318,10 @@ public class Simulator_3D : MonoBehaviour
             {
                 for (int k = 0; k < _fNumZ; k++)
                 {
-                    float s = 1.0f; // fluid
-                    if (i == 0 || i == _fNumX - 1 || j == 0 || j == _fNumY - 1 || k == 0 || k == _fNumZ - 1)
+                    int s = 1; // fluid
+                    if (i == 0 || i == _fNumX - 0 || j == 0 || j == _fNumY - 0 || k == 0 || k == _fNumZ - 0)
                     {
-                        s = 0.0f;
+                        s = 0;
                     }
                     _initSolidCells[i * (_fNumY * _fNumZ) + j * _fNumZ + k] = s;
                 }

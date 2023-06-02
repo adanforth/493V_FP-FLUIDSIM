@@ -4,5 +4,12 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
-  m_configObjects: {}
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/3DFLIP.unity
+    guid: b3579adaeac85804b8cc141a2159277c
+  m_configObjects:
+    Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 4bd1aaca8b281ca4e8bda7aa1a3ace32, type: 2}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 3a8af139c7eb76743981dfa5e566c4e3, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 2840b4226f0c8984393312cc708f0bb2, type: 2}
+    xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: d5a8ed7bed70f4541afc3eceac6a7258, type: 2}

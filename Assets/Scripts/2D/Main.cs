@@ -17,6 +17,7 @@ public class Main : MonoBehaviour
     private List<GameObject> gridCells = new List<GameObject>();
     [SerializeField] bool showGrid;
     [SerializeField] int _solveIterations = 1;
+    [SerializeField] Color _particleColor;
 
 
     private Vector3 _curMousePos;
@@ -27,6 +28,13 @@ public class Main : MonoBehaviour
     private struct Mesh_Data
     {
         public Matrix4x4 mat;
+        public Color color;
+
+        public Mesh_Data(Matrix4x4 _mat, Color _color)
+        {
+            mat = _mat;
+            color = _color;
+        }
     };
 
     // GLOBAL PARAMETERS
@@ -132,7 +140,7 @@ public class Main : MonoBehaviour
     {
         // Move camera
         cam = Camera.main;
-        cam.transform.position = new Vector3(_simWidth / 2, _simHeight / 2, - _simWidth / 2);
+        cam.transform.position = new Vector3(_simWidth / 2, _simHeight / 2, - _simWidth * .7f);
 
         _curMousePos = Vector3.zero;
         _prevMousePos = Vector3.zero;
@@ -148,7 +156,7 @@ public class Main : MonoBehaviour
 
         // Particle stuff
         _r = 0.3f * h;
-        _particleScale = new Vector3(1 * _r, 1 * _r, 1 * _r);
+        _particleScale = new Vector3(2.4f * _r, 2.4f * _r, 2.4f * _r);
 
 
         // Setting up for "Dam Break" init
@@ -194,7 +202,7 @@ public class Main : MonoBehaviour
             var pos = _initParticlePositions[i];
             var rot = Quaternion.identity;
 
-            _initParticleMatricies[i] = new Mesh_Data { mat = Matrix4x4.TRS(pos, rot, _particleScale) };
+            _initParticleMatricies[i] = new Mesh_Data(Matrix4x4.TRS(pos, rot, _particleScale), _particleColor);
         }
 
         setSolidCells();
@@ -300,7 +308,7 @@ public class Main : MonoBehaviour
 
         _particleVelocitiesBuffer = new ComputeBuffer(_numParticles, 12);
 
-        _meshPropertiesBuffer = new ComputeBuffer(_numParticles, 64);
+        _meshPropertiesBuffer = new ComputeBuffer(_numParticles, 64 + 16);
         _meshPropertiesBuffer.SetData(_initParticleMatricies);
 
         _cellIsSolidBuffer = new ComputeBuffer (_fNumCells, 4);

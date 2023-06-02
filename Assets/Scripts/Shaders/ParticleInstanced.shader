@@ -35,19 +35,24 @@ Shader "FLIP/ParticleInstanced"
             {
                 float4 vertex : POSITION;
                 float4 color : COLOR;
+
             };
 
             struct v2_f
             {
                 float4 vertex : SV_POSITION;
                 fixed4 color : COLOR;
+
             };
 
             StructuredBuffer<mesh_data> data;
 
             v2_f vert(const appdata_t i, const uint instance_id: SV_InstanceID)
             {
+
+
                 v2_f o;
+
 
                 const float4 pos = mul(data[instance_id].mat, i.vertex);
                 o.vertex = UnityObjectToClipPos(pos);
