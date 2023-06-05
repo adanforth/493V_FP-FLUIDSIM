@@ -160,11 +160,13 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 8210444231714497919, guid: fad392af1a2f1df49bc2abbbabe404c9, type: 3}
   showGrid: 0
   _solveIterations: 1000
-  _particleColor: {r: 0, g: 0, b: 1, a: 1}
+  _particleColor: {r: 0.1, g: 0.1, b: 1, a: 1}
+  _particleRadius: 2
+  _timeStepMult: 2
   _gridCellDensity: 4
-  _simWidth: 20
-  _simHeight: 10
-  _flipRatio: 0.95
+  _simWidth: 40
+  _simHeight: 20
+  _flipRatio: 1
   relativeWaterHeight: 0.9
   relativeWaterWidth: 0.5
   _compute: {fileID: 7200000, guid: e10385ef8d17c764783affc05aa4f229, type: 3}

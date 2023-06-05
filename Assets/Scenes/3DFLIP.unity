@@ -519,19 +519,20 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 6691955925574645823, guid: 78cc2e52aa74ded46802d9cf87e6b736, type: 3}
   bottomPlane: {fileID: 731522172}
   showGrid: 0
-  _solveIterations: 1200
-  _partcileRadius: 2
+  _solveIterations: 100
+  _partcileRadius: 1.9
   _timeScale: 1.5
-  _restDensityMult: 7
+  _restDensityMult: 88
   _baseParticleColor: {r: 0, g: 0, b: 1, a: 1}
   _fastParticleColor: {r: 0, g: 0, b: 0, a: 0}
-  _gridCellDensity: 3
+  _gridCellDensity: 4
   _simWidth: 20
   _simHeight: 10
   _simDepth: 10
-  _flipRatio: 0.9
-  relativeWaterHeight: 0.9
-  relativeWaterWidth: 0.298
+  _flipRatio: 0.85
+  relativeWaterHeight: 0.8
+  relativeWaterWidth: 0.4
+  relativeWaterDepth: 1
   _compute: {fileID: 7200000, guid: 41975871e8b74b34590908eaf11c0b39, type: 3}
 --- !u!4 &1604613204
 Transform:

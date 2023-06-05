@@ -29,6 +29,7 @@ Shader "CustomRenderTexture/rendertex"
             float       _ScreenHeight;
             float       _ScreenWidth;
 
+
             float3 calculateViewPos(float2 coord, float depth) 
             {    
                 //float3 p_ndc = float3((2 * coord.x / _ScreenWidth - 1), (2 * coord.y / _ScreenHeight - 1), (2 * depth - 1));
@@ -41,41 +42,34 @@ Shader "CustomRenderTexture/rendertex"
 
             float4 frag(v2f_init_customrendertexture IN) : COLOR
             {
-                float depth = tex2D(_CameraDepthTexture , IN.texcoord.xy).x;
+                
+                if (tex2D(_Tex, IN.texcoord.xy).w == 1)
+                {
+                    return tex2D(_Tex, IN.texcoord.xy);
+                }
+                float4 sum = float4(0.0,0,0,0);
 
-                return tex2D(_Tex, IN.texcoord.xy);
+                float2 u_texture_size_inv = (1 / _ScreenWidth, 1 / _ScreenHeight);
 
+  
+                int M = 1;
 
-                if (depth > .9999) {
-                    return _Color * tex2D(_Tex, IN.texcoord.xy);
+                for (int i = 0; i < M; ++i)
+                {
+                    for (int j = 0; j < M; ++j)
+                    {
+                        float2 tc = IN.texcoord.xy + u_texture_size_inv * float2(float(i - M), float(j - M));
+                        sum += tex2D(_Tex, tc) / (M * M);
+                    }
                 }
 
-                float3 viewPos = calculateViewPos(IN.texcoord.xy, depth);
+                
 
-                float offset = 0.05 / _ScreenWidth;
-                float2 uv = float2(IN.texcoord.x + offset, IN.texcoord.y);
-                float2 uv2 = float2(IN.texcoord.x - offset, IN.texcoord.y);
+                return sum;
 
-                float3 ddx = calculateViewPos(uv, tex2D(_Tex, uv)) - viewPos;
-                float3 ddx2 = viewPos - calculateViewPos(uv2, tex2D(_Tex, uv2));
-                if (abs(ddx.z) > abs(ddx2.z)) {
-                    ddx = ddx2;
-                }
 
-                offset = 0.05 / _ScreenHeight;
-                uv = float2(IN.texcoord.x, IN.texcoord.y + offset);
-                uv2 = float2(IN.texcoord.x, IN.texcoord.y - offset);
+                //float depth = tex2D(_CameraDepthTexture , IN.texcoord.xy).x;
 
-                float3 ddy = calculateViewPos(uv, tex2D(_Tex, uv)) - viewPos;
-                float3 ddy2 = viewPos - calculateViewPos(uv2, tex2D(_Tex, uv2));
-                if (abs(ddy.z) > abs(ddy2.z)) {
-                    ddy = ddy2;
-                }
-
-                float3 n = normalize(cross(ddx, ddy));
-
-                //return _Color * tex2D(_Tex, IN.texcoord.xy);
-                return float4(n, 1.0);
             }
             ENDCG
         }

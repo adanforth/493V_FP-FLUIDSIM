@@ -144,7 +144,7 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 
     meshProperties[id.x].mat = mat;
     
-    float d = .01;
+    float d = .03;
     meshProperties[id.x].color = float4(clamp(meshProperties[id.x].color.x - d, 0.0, 1.0),
                                         clamp(meshProperties[id.x].color.y - d, 0.0, 1.0),
                                         clamp(meshProperties[id.x].color.z + d, 0.0, 1.0),
@@ -160,7 +160,7 @@ void render_particles(uint3 id : SV_DispatchThreadID)
 
     int cell_nr = (int) (x_i * _fNumY * _fNumZ) + (y_i * _fNumZ) + z_i;
     
-    if (_particleRestDensity > 0.1 && y_i > _fNumY / (3.2 * clamp(RandomFloat(id.x) + 1, 1, 1.5)))
+    if (cellTypes[cell_nr + _fNumZ] == 1 && _particleRestDensity > 0.1)
     {
         float relDensity = (particleDensity[cell_nr] / 100000.0f) / (_particleRestDensity);
         if (relDensity < 0.3)
@@ -648,10 +648,10 @@ void convert_velocity_to_float(uint3 id : SV_DispatchThreadID)
 void solve_Incompressibility(uint3 id : SV_DispatchThreadID)
 {
     
-    if (id.x / (_fNumY * _fNumZ) < 1 || id.x / (_fNumZ) < 1 || id.x < 1)
-    {
-        return;
-    }
+    //if (id.x / (_fNumY * _fNumZ) < 1 || id.x / (_fNumZ) < 1 || id.x < 1)
+    //{
+    //    return;
+    //}
     
     uint center = id.x;
     if (cellTypes[center] == FLUID_CELL)

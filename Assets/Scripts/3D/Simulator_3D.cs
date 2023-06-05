@@ -66,8 +66,8 @@ public class Simulator_3D : MonoBehaviour
     public float relativeWaterHeight = 0.8f;
     [Range(0, .9f)]
     public float relativeWaterWidth = 0.4f;
-    //    [Range(0, .9f)]
-    //public float relativeWaterDepth = 0.4f;
+    [Range(0, 1f)]
+    public float relativeWaterDepth = 0.4f;
 
     //// Dimensions of the grid coords - aka there are _gridResX = (fNumX -1) cells in the x direction, and _gridResY cells in the y directrion (in 2D at least)
     //private float _gridResX;
@@ -151,7 +151,7 @@ public class Simulator_3D : MonoBehaviour
     {
         // Move camera
         cam = Camera.main;
-        cam.transform.position = new Vector3(_simWidth * 1.6f, 1.7f * _simHeight, -_simDepth * .95f);
+        cam.transform.position = new Vector3(_simWidth * 1.2f, 1.4f * _simHeight, -_simDepth * .95f);
         cam.transform.LookAt(gameObject.transform.position + new Vector3(_simWidth/2, _simHeight/5, _simDepth / 2));
 
 
@@ -180,6 +180,7 @@ public class Simulator_3D : MonoBehaviour
 
         int numX = (int)math.floor((relativeWaterWidth * _simWidth - 2.0f * h - 2.0f * _r) / dx);
         int numY = (int)math.floor((relativeWaterHeight * _simHeight - 2.0f * h - 2.0f * _r) / dy);
+        //int numZ = (int)math.floor((relativeWaterDepth * _simHeight - 2.0f * h - 2.0f * _r) / dy);
         int numZ = (int)math.floor((_simDepth - 2 * h) / dz);
         _numParticles = numX * numY * numZ;
 
@@ -215,8 +216,16 @@ public class Simulator_3D : MonoBehaviour
             {
                 for (int k = 0; k < numZ; k++)
                 {
+                    if (i < numX / 2)
+                    {
+                        _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
+                    } else
+                    {
+                        _initParticlePositions[pInd].x = .71f * _simWidth + _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
+                    }
                     _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
-                    _initParticlePositions[pInd].y = (_h + _r + dy * j);
+                    _initParticlePositions[pInd].y = (_h + _r + dy * j) + (k % 2 == 0 ? 0.0f : _r);
+                    //_initParticlePositions[pInd].y = _simHeight * .35f + (_h + _r + dy * j) + (k % 2 == 0 ? 0.0f : _r);
                     _initParticlePositions[pInd].z = _h + _r + dz * k;
                     pInd++;
                 }
@@ -327,6 +336,7 @@ public class Simulator_3D : MonoBehaviour
                 }
             }
         }
+
     }
 
     private void UpdateBuffers()
@@ -367,6 +377,8 @@ public class Simulator_3D : MonoBehaviour
         _compute.SetBuffer(_render_particles, "meshProperties", _meshPropertiesBuffer);
         _compute.SetBuffer(_render_particles, "particlePositions", _particlePositionsBuffer);
         _compute.SetBuffer(_render_particles, "particleDensity", _particleDensityBuffer);
+        _compute.SetBuffer(_render_particles, "cellIsSolid", _cellIsSolidBuffer);
+        _compute.SetBuffer(_render_particles, "cellTypes", _cellTypeBuffer);
         _instanceMaterial.SetBuffer("data", _meshPropertiesBuffer);
 
         // Set particle pos and vel for integrate

@@ -18,6 +18,9 @@ public class Main : MonoBehaviour
     [SerializeField] bool showGrid;
     [SerializeField] int _solveIterations = 1;
     [SerializeField] Color _particleColor;
+    [SerializeField] float _particleRadius;
+    [SerializeField] float _timeStepMult;
+
 
 
     private Vector3 _curMousePos;
@@ -156,7 +159,7 @@ public class Main : MonoBehaviour
 
         // Particle stuff
         _r = 0.3f * h;
-        _particleScale = new Vector3(2.4f * _r, 2.4f * _r, 2.4f * _r);
+        _particleScale = new Vector3(_particleRadius * _r, _particleRadius * _r, _particleRadius * _r);
 
 
         // Setting up for "Dam Break" init
@@ -168,7 +171,7 @@ public class Main : MonoBehaviour
         int numY = (int) math.floor((relativeWaterHeight * _simHeight - 2.0f * h - 2.0f * _r) / dy);
         _numParticles = numX * numY;
 
-        //Debug.Log(_numParticles);
+        Debug.Log(_numParticles);
         _fNumX = (int)math.floor(_simWidth / h) + 1;
         _fNumY = (int)math.floor(_simHeight / h) + 1;
 
@@ -529,7 +532,7 @@ public class Main : MonoBehaviour
         //Destroy(xdd);
         //xdd = Instantiate(fluidCellPrefab, new Vector3(_h * (x0 + 1f), _h * (y0 + 1f), 0), Quaternion.identity);
 
-        _compute.SetFloat("_timeStep", 2 * Time.deltaTime);
+        _compute.SetFloat("_timeStep", _timeStepMult * Time.deltaTime);
         //_compute.SetFloat("_timeStep", 1f / 250f);
 
         Debug.DrawLine(new Vector3(0,0, 0), new Vector3(0, _simHeight + _h/2, 0), Color.gray);

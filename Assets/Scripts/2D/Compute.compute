@@ -345,8 +345,8 @@ void avg_cell_velocities(uint3 id : SV_DispatchThreadID)
 void restore_solid_cells(uint3 id : SV_DispatchThreadID)
 {
     bool solid = cellTypes[id.x] == SOLID_CELL;
-    int x = id.x / (_fNumY * 1);
-    int rem = id.x % (_fNumY * 1);
+    int x = id.x / (_fNumY - 1);
+    int rem = id.x % (_fNumY - 1);
     int y = rem / 1;
     int z = rem % 1;
     if (solid || (x > 0 && cellTypes[id.x - _fNumY] == SOLID_CELL))

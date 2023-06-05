@@ -158,6 +158,14 @@ public class Simulator_SSFR : MonoBehaviour
 
         //cam.SetTargetBuffers(tex.colorBuffer, tex.depthBuffer);
         Mat = new Material(Shader.Find("Hidden/ScreenDepthNormal"));
+        if (cam != null)
+        {
+            cam.depthTextureMode = cam.depthTextureMode | DepthTextureMode.Depth; ;
+        }
+        else
+        {
+            Debug.Log("no cam");
+        }
 
         _curMousePos = Vector3.zero;
         _prevMousePos = Vector3.zero;
@@ -230,7 +238,7 @@ public class Simulator_SSFR : MonoBehaviour
         for (var i = 0; i < _numParticles; i++)
         {
             var pos = _initParticlePositions[i];
-            var rot = Quaternion.identity;
+            var rot = Quaternion.LookRotation(cam.transform.position - new Vector3(pos.x, pos.y, pos.z), Vector3.up);
 
             _initParticleMatricies[i] = new Mesh_Data(Matrix4x4.TRS(pos, rot, _particleScale), _baseParticleColor);
         }

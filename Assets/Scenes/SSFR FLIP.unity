@@ -194,7 +194,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 1, g: 1, b: 1, a: 0}
+  m_BackGroundColor: {r: 0.18039216, g: 0.1764706, b: 0.18039216, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -502,7 +502,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.1792453, g: 0.1792453, b: 0.1792453, a: 0}
+  m_BackGroundColor: {r: 0.2735849, g: 0.2735849, b: 0.2735849, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -523,7 +523,7 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
+  near clip plane: 0.01
   far clip plane: 1000
   field of view: 60
   orthographic: 0
@@ -551,7 +551,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -28.896}
+  m_LocalPosition: {x: 0, y: 0, z: -27.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -646,7 +646,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _instanceMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
-  _instanceMaterial: {fileID: 2100000, guid: 59db67341b3a7fe428f095403620f80d, type: 2}
+  _instanceMaterial: {fileID: 2100000, guid: 4d5b6d076457f224c96975f91309ce7e, type: 2}
   cam: {fileID: 227875107}
   tex: {fileID: 8600000, guid: 3c446ae043765ac478fb0975b70023a9, type: 2}
   Mat: {fileID: 0}
@@ -656,8 +656,8 @@ MonoBehaviour:
   showGrid: 0
   _solveIterations: 600
   _partcileRadius: 3
-  _timeScale: 1.2
-  _restDensityMult: 5.5
+  _timeScale: 1.75
+  _restDensityMult: 3.5
   _baseParticleColor: {r: 0, g: 0, b: 0, a: 0}
   _fastParticleColor: {r: 0, g: 0, b: 0, a: 0}
   _gridCellDensity: 3
@@ -729,7 +729,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: dc4c14eacd41018449480c2b2f7ddb62, type: 2}
+  - {fileID: 2100000, guid: d36802768d606e846a71a931f21e31bf, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
