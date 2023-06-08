@@ -403,8 +403,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 705911724}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.99, y: 0.5, z: -4}
-  m_LocalScale: {x: 10, y: 10, z: 10}
+  m_LocalPosition: {x: 4.99, y: 0.5, z: -2.69}
+  m_LocalScale: {x: 20, y: 20, z: 20}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1818087332}
@@ -1094,16 +1094,16 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 6691955925574645823, guid: 78cc2e52aa74ded46802d9cf87e6b736, type: 3}
   bottomPlane: {fileID: 1863463192}
   showGrid: 0
-  _solveIterations: 600
+  _solveIterations: 100
   _partcileRadius: 2.5
-  _timeScale: 1.5
-  _restDensityMult: 6.5
+  _timeScale: 0.8
+  _restDensityMult: 8
   _baseParticleColor: {r: 0, g: 0, b: 1, a: 1}
   _fastParticleColor: {r: 0, g: 0, b: 0, a: 0}
-  _gridCellDensity: 5
-  _simWidth: 10
-  _simHeight: 5
-  _simDepth: 5
+  _gridCellDensity: 4
+  _simWidth: 20
+  _simHeight: 10
+  _simDepth: 10
   _flipRatio: 0.901
   relativeWaterHeight: 0.9
   relativeWaterWidth: 0.505

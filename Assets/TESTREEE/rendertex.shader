@@ -43,16 +43,16 @@ Shader "CustomRenderTexture/rendertex"
             float4 frag(v2f_init_customrendertexture IN) : COLOR
             {
                 
-                if (tex2D(_Tex, IN.texcoord.xy).w == 1)
-                {
-                    return tex2D(_Tex, IN.texcoord.xy);
-                }
+                //if (tex2D(_Tex, IN.texcoord.xy).w == 1)
+                //{
+                //    return tex2D(_Tex, IN.texcoord.xy);
+                //}
                 float4 sum = float4(0.0,0,0,0);
 
                 float2 u_texture_size_inv = (1 / _ScreenWidth, 1 / _ScreenHeight);
 
   
-                int M = 1;
+                int M = 15;
 
                 for (int i = 0; i < M; ++i)
                 {

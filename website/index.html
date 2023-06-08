@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <!-- Basic Page Needs
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <meta charset="utf-8">
+    <title>Interactable Fluid Simulations in VR</title>
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Mobile Specific Metas
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- FONT
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <link href='https://fonts.googleapis.com/css?family=Raleway:400,300,600' rel='stylesheet' type='text/css'>
+
+    <!-- CSS
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/skeleton.css">
+    <link rel="stylesheet" href="css/custom.css">
+
+    <!-- Scripts
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="js/site.js"></script>    
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=default'></script>
+
+    <!-- Favicon
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <link rel="icon" type="image/png" href="favicon.png">
+
+</head>
+
+<body>
+
+    <!-- Primary Page Layout
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+    <div class="container">
+        
+        <!-- Title
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+        
+        <section class="hero u-full-width">
+            <div class="hero-image"></div>
+            <div class="container centered">
+                <div class="twelve columns">
+                    <h1>Interactable Fluid Simulations in VR</h1>
+                    <h3>CSE493V: Vr Systems Spring 2023</h3>
+                    <h2>Andy Danforth</h2>
+                    <h2>University of Washington</h2>
+
+                </div>
+            </div>
+        </section>
+        
+        <!-- Navigation
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="navbar-spacer"></div>
+        <nav class="navbar">
+            <div class="container">
+                <ul class="navbar-list">
+                    <li class="navbar-item"><a class="navbar-link" href="#intro">Introduction</a></li>
+                    <li class="navbar-item"><a class="navbar-link" href="#related">Related Work</a></li>
+                    <li class="navbar-item"><a class="navbar-link" href="#method">Method</a></li>
+                    <li class="navbar-item"><a class="navbar-link" href="#implementation">Implementation</a></li>
+                    <li class="navbar-item"><a class="navbar-link" href="#analysis">Results</a></li>
+                    <li class="navbar-item"><a class="navbar-link" href="#references">References</a></li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Abstract
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+        
+        <div class="docs-section" id="abstract">
+            
+            <h6 class="docs-header">Abstract</h6>
+            <p>This report presents my time learning about and implementing an interactable VR fluid simulation in Unity.
+                I was originally inspired by the grid based sandbox, <a href="https://dan-ball.jp/en/javagame/dust/">powder</a>, and discovered a substantial amount of 
+                literature on fluid simulations after researching it. With these resources as well as help from a few industry members I reached out to, I implemented a 
+                2D, 3D and VR particle based fluid simulation in Unity that runs in real time as to allow for real time user interactions. I did not end up having the time
+                to implement realistic screen space fluid rendering, so this is left as future work for this project.
+            <p>
+                <i>
+                    All sources will be listed in the resources section.
+                </i>
+            </p>
+            <!-- Slideshow
+            –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+            
+            <!-- Slideshow container -->
+            <div class="slideshow-container">
+
+                <!-- Full-width images with number and caption text -->
+                <div class="mySlides">
+                    <div class="numbertext">1 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/Integrate.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">First create particles and integrate them according to gravity.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">2 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/EnforceBoundaries.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Create some sort of boundaries for the particles to interact in.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">3 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/ShowGrid.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Create a grid representation of the environment to solve the sim on.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">4 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/2Dgridsim.mp4" type="video/mp4">
+                    </video>                    
+                    <div class="text">Transfer velocities to the grid, solve the sim, and imbue solved velocities back to particles.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">5 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/2Dsim.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Tune parameters and add interactions.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">6 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/3DNoColor.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Add a third dimension.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">7 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/3DColor.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Add coloring by height and cell density.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">8 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/3DAlpha.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">One failed attempt to create more realistic fluids - This was the best I got in my short time, simple alpha blending</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">9 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/3DAlphaFail.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Another of many fails to create realistic fluid using a gaussian blur to try and "fill seams."</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">10 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/VRsim.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Modify the rendering of particles to get it to work in VR.</div>
+                </div>
+                <div class="mySlides">
+                    <div class="numbertext">11 / 11</div>
+                    <video autoplay muted playsinline loop style="width:100%">
+                        <source src="images/FluidSimImgs/VRInteraction.mp4" type="video/mp4">
+                    </video>
+                    <div class="text">Add vr controller interaction.</div>
+                </div>
+         
+                <!-- Next and previous buttons -->
+                <a class="prev" onclick="plusSlides(-1)">&#10094;</a>
+                <a class="next" onclick="plusSlides(1)">&#10095;</a>
+            </div>
+            
+            <!-- The dots/circles -->
+            <div style="text-align:center">
+                <span class="dot" onclick="currentSlide(1)"></span>
+                <span class="dot" onclick="currentSlide(2)"></span>
+                <span class="dot" onclick="currentSlide(3)"></span>
+                <span class="dot" onclick="currentSlide(4)"></span>
+                <span class="dot" onclick="currentSlide(5)"></span>
+                <span class="dot" onclick="currentSlide(6)"></span>
+                <span class="dot" onclick="currentSlide(7)"></span>
+                <span class="dot" onclick="currentSlide(8)"></span>
+                <span class="dot" onclick="currentSlide(9)"></span>
+                <span class="dot" onclick="currentSlide(10)"></span>
+                <span class="dot" onclick="currentSlide(11)"></span>
+            </div>
+            
+            <script src="js/slideshow.js"></script>
+            
+            <div style="line-height:25%;">
+                <br>
+            </div>
+            
+            <p>All of these videos were taking in Unity's play mode after various steps during the implementation of the project. 
+               More implementation details can be found below. The VR recordings took place on a class provided Meta Quest 2.</p>
+            
+             <!-- End of slideshow
+            –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+            
+        <!-- Introduction
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+        
+        <div class="docs-section" id="intro">
+            
+            <h6 class="docs-header">Introduction</h6>
+            <p>
+                As I stated above, I was really inspired by powder and the cool simulated environments you could create in it. Setting up some 
+                environment and allowing the underlying physics to run their course was something that I found very satisfying. Powder  
+                was only in two dimensions and I felt like adding a third would only serve to add to its immersion - and making it in VR would
+                add even more while also being in the vein of the course. I was especially motivated since there were very few particle sims in VR. 
+                However, the simulation in powder includes many different particles and properties that would be very hard to implement
+                in the little time I had so I chose to focus only on simulating water - still a difficult task but there was at least a lot of 
+                existing literature on this topic. I some experience with Unity and I knew Unity had
+                great VR support so I opted to implement this project using it.
+            </p>
+            <p>
+                <h5 id="related"><b>Related Work</b></h5>
+
+                Realistic fluid simulations are no new thing. One of the most cited papers on fluid simulations
+                as I am implementing is Zhu and Bridson's 2005 paper "Animating Sand as a Fluid." They present 
+                very detailed explanations of their method of fluid simulation that combines the strengths of 
+                grids and particles. 
+                
+                Matthias Müller recreates this method in an extremely helpful youtube video 
+                which describes the FLuid Implicit Particle. He also provides source code for implementing this 
+                method in two dimentions.
+
+                David Li implemented a 3D interactable fluid simulation online which greatly inspired my own work.
+
+                Macklin and Müller's 2013 paper "Position Based Fluids" offers another fluid simulation 
+                that also served to inspire my work.
+
+                Nvidia's Cataclysm FLuid Implicit Particle solver with GPU Particles also inspired me, though 
+                implementation details were missing.
+
+                Simon Green created a very helpful guide, "Screen Space Fluid Rendering for Games," which documents 
+                a method for rendering particle based fluid simulations in a realistic way - I had hoped to implement 
+                this as well, but could not due to time.
+                </p>
+                <p>
+                    I used the same math as the related work above as I do not have time to implement 
+                    my own unique fluid solver as cool as that would be. I only had access to Müller and Li's implementations from the work listed above, 
+                    but my implementation still was unique in the following ways: I implemented the rendering of 
+                    particles using Unity's GPU instancing, I made my simulation work in VR for real time 
+                    VR interactions, and I solved all of the simulation in parallel with shared compute buffers and compute shaders. 
+                    My implementation being in VR as well as my need for parallel solvers also meant the algorithms I used 
+                    needed to be updated slightly from the ones in the related work, but they are overall the same.
+            </p>
+            <!-- <p>
+                <h5><b>Findings</b></h5>
+
+                After finishing the project I was overall happy with the results. I encountered a lot of errors and 
+                weird unexplained behaviors implementing the algorithms listed above, but small tweaks were enough 
+                to give me good looking results. Many visual bugs still exist, a dozen small tuning/damping factors are
+                required for it to work, and off by 1 errors are likely in every function, but as a whole it is stable. Parallelizing 
+                some functions turned out to be a lot harder than I thought since I did not have access to memory safe 
+                addition for floats, and the method Müller used for solving actually was iterative and not parallelizable. 
+                However, once I got it working, the results spoke for themselves and I could render up to 200,000 individual 
+                particles in the simulation at up to 60 fps (This was in Unity's play mode which has a large overhead for
+                metrics and whatnot). Other than the fast performance, there isn't much to say for the findings - videos 
+                and images of the simulator running will be included below.
+            </p>
+            <p>
+                <h5><b>Future Work</b></h5>
+
+                While work for the project is done as far as the class is concerned, there is plenty of 
+                potential future work. Most pressing, there are a ton of small visual bugs which likely 
+                stem from off by 1 errors somewhere in my solver. In would also like to implement more 
+                complicated environments since right now my simulation only works in a fish tank. Potentially, I 
+                could add more ways to interact, like adding more water with a hose, or turning the entire tank 
+                around. I also tweak all of my variables and run in Unity's play mode - in order to make this 
+                useable for anyone else, I should add some way to tweak and reset the simulation while its running, 
+                rather than manually restarting it. And finally, I would really like to add a more realistic surface
+                reconstruction method like in Green's presentation.
+            </p> -->
+
+            <h6 class="docs-header">Contributions</h6>
+            <p>The follow are my major contributions:</p>
+            
+            <ul style="line-height:1.5;">
+                <li>I made an implementation of the Fluid Implicit Particle method for fluid simulations that runs 
+                    in parallel and renders using GPU Instancing which result in a very fast simulation.</li>
+                <li>I am publishing all of this code on GitHub for people in the future to reference when 
+                    making their own fluid solvers.
+                </li>
+                <li>I made this simulation work in VR by modifying my rendering shaders to work in stereo.</li>
+            </ul>
+            
+        </div>
+        
+        <!-- Related Work
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <!-- <div class="docs-section" id="related">
+
+            <h6 class="docs-header">Related Work</h6>
+            <p>This section should review related work, including references to publications, products, and other items you're building on and/or competing with. 
+                Try to group these into major topics (e.g., different approaches to algorithmic or hardware problems). Talk about each group in a separate subsection. 
+                Use a table or figure to help readers understand particularly complex topics or trade-offs. See the example reports for some idea of how to put this section together.</p>
+            <ul style="line-height:1.5;">
+                <li>I made an implementation of the Fluid Implicit Particle method for fluid simulations that runs 
+                    in parallel and renders using GPU Instancing which result in a very fast simulation.</li>
+                <li>I am publishing all of this code on GitHub for people in the future to reference when 
+                    making their own fluid solvers.
+                </li>
+                <li>I made this simulation work in VR by modifying my rendering shaders to work in stereo.</li>
+            </ul>
+            FLUID METHOD - Eulerian, Langratian, combo
+
+            IMPLEMENTATION METHOD - unity, graphics library - etc
+
+        </div> -->
+        
+        <!-- Method
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="method">
+
+            <h6 class="docs-header">Method</h6>
+            <p>
+                There are two typical ways fluids are simulated in 3D: Eulerian grids and Lagrangian particles. 
+                Eulerian methods keep track of variables on a fixed grid, and Lagrangian store 
+                fluid variables on individual particles. Zhu and Bridson [2005] discuss a method that combines 
+                the strengths of a grid based and particle based simulation: the Fluid-Implicit Particle (FLIP) method.
+
+                In the FLIP method, particles in the simulation store their position and velocity, and exist in 
+                an underlying grid where cells keep track of their incoming/outgoing velocities, pressures, etc. 
+                At a glance, one step of the algorithm I implemented is as follows:
+                <ul>
+                    <li>Particles will integrate themselves according to their stored velocity and position.</li>
+                    <li>Each particle checks if it falls outside of the boundary, if so, then it will move back inside and 
+                        set its velocity to 0.
+                    </li>
+                    <li>Every particle will perform a weighted transfer of its velocity to nearby grid cells based on
+                        its distance to these cells.
+                    </li>
+                    <li>We will solve for incompressibility of the grid cells. Since we are modelling water, we need to 
+                        preserve water's property that it does not compress easily. I.e. we cannot allow more water to flow 
+                        into a cell than flows out.
+                    </li>
+                    <li>Transfer the cell velocities back to particles within them.
+                    </li>
+                    <li>Finally we can color the particles based on their velocity, relative cell pressure or some 
+                        other metric to create a more stylized simulation. 
+                    </li>
+                </ul>
+                
+                Ideally, all of these steps will be done in parallel, one after the other - using the 
+                same shared compute buffer on the GPU to minimize any expensive transfers of memory from 
+                CPU to GPU.                
+                <br>
+                <br>
+                As for rendering, I used GPU Instanced rendering which is provided by Unity. So every particle used the 
+                same exact mesh for rendering - a simple sphere. Then color and position of the spheres would be 
+                determined by another parallellized function in my compute shader. Doing this rendering in VR
+                requires a small change to the shader for our particles so that they are drawn in stereo - but this along 
+                with more details for the specifics of this implementation will be documented below. 
+                <br>
+                <br>
+                Adding user interaction is trivial, thanks to how fast the simulation runs. All that's needed 
+                for user interaction is to track some sort of input in real time - a mouse in 2D, or a VR controller in 3D.
+                Map this position to a position in the grid. Then, for every loop of the simulation, track 
+                the difference in its position, calculate the velocity based on this difference and the time passed, and finally 
+                add this velocity to nearby grid cells before solving for incompressibility. 
+                <br>
+                <br>
+                Finally, to render the fluid more realistically, I wanted to use screen space fluid rendering.
+                This involves taking the image of the fluid that is displayed on the screen, and performing some shader 
+                passes on this 2D image to make it appear more realistic for a viewer. However, as I stated above, I 
+                did not have the time or knowledge to implement this, though (details as I understand them) will be 
+                presented below.
+            </p>
+        </div>
+        
+        <!-- Implementation
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="implementation">
+
+            <h6 class="docs-header">Implementation Details</h6>
+           <p>
+                We will discuss the more specific implementation details of this project in parts (a few of the simulation steps are presented as videos at the top of the 
+                website):
+            </p>
+            <p>
+                <h5><b>Hardware/Software</b></h5>
+
+                To begin, I implemented all of this code on my personal computer which has an NVIDIA graphics card. The simulation was built in 
+                Unity version 2022.2.6f1 in the Universal Render Pipeline with the Mathematics package, Occulus XR Plugin and XR Interaction Tools package.
+                All of the VR simulations were recorded using an Occulus Quest 2 provided by the class.
+            </p>
+            <p>
+                <h5><b>Code Organization</b></h5>
+                I had two main files for my code: A compute shader which has functions for each step/sub-step of my fluid solver and  
+                a C# script to set things up and run an Update() loop which in each loop will call the functions defined in the compute shader. 
+                The C# script is where parameters for the simulation are defined before each run. E.g. the simulation height, width and depth, the 
+                time step size, the particle radius, number of grid cells, etc. In the start() function, the C# script will calculate the number of particles and grid cells 
+                based on these input parameters and initialize a number of fixed length compute buffers that the compute shader will make use of. 
+                It is also important to release these buffers on disable as well. The C# 
+                script is also responsible for controlling the camera and any VR inputs that might take place.
+            </p>
+            <p>
+                <h5><b>Fluid Simulation</b></h5>
+                    This is where the bulk of the project is centered. As stated in the introduction, I am implementing the FLIP method for fluid simulations. 
+                    In this method, we maintain a large buffer of particles and grid cells. 
+                    <h6><i><br>Particles</i></h6>
+                    
+                        The particles keep track of their position and velocity in two separate 
+                        float3 buffers. So for example, 
+                        $${ParticlePositions[i] = float3(a, b, c)}$$
+                        which tells us that particle i is located at x = a, y = b, and z = c in whatever coordinates we are using. The velocity buffer 
+                        acts in the same way.
+                    <h6><i><br>Grid Cells</i></h6>
+                        We will be using the marker and cell (MAC) method which discretizes the environment of our fluid simulation.
+                        And becase we have a discrete number of grid cells in each cardinal direction we can easily index them. Firstly we need 
+                        to define how large our simulation space is - for this sim I typically chose a width of 40 unity units, and a height and 
+                        depth of 20 unity units. Now, we define how "dense" we want to pack these unity units with cells. The more dense, the smaller 
+                        our particles will look, but the slower it will run. Let's call the number of cells in the 
+                        x, y, and z direction  
+                        <b>numX</b>, <b>numY</b> and <b>numZ</b> respectively. If we have a grid cell at (i, j, k), then we can find its index as follows: 
+                        $${index = i * (numY * numZ) + j * (numZ) + k}$$
+                        
+                        In other words, we iterate over grid cells in the z direction first, the y second, and the x last. We will have buffers to keep track of 
+                        grid cell velocities which behave the same as the buffers we had for particles. But we also will keep track of things like cell pressure,
+                        and cell type. We can define cell type for each step of the simulation by iterating over every particle and marking the cell it occupies 
+                        as a fluid cell. That way, when we later need to iterate over our cells, we will only process the ones with fluid in them, which saves a 
+                        lot of computation - this is the general idea behind a MAC grid.
+                    <h6><i><br>Integrate Particles</i></h6>
+                        This step is pretty trivial. We will simply update each particle's position by its velocity and the time step from the last iteration. 
+                        We also will add gravity to the vertical velocity component in this step before we integrate.
+                    <h6><i><br>Transfer to Grid Cells</i></h6>
+                        Once all of the particles have moved to their new positions, we will transfer their velocities onto our grid. This will be done 
+                        using a standard bilinear interpolation from the particle to the neighboring 4 cells. Or in 3D it will use trilinear interpolation on 
+                        8 cells. We will weight the velocity added to a cell based on its distance from a cell, determined by our interpolation. This addition
+                        will take place in the compute buffer for our cell's velocities. We will also add the weight to a different buffer for the cells. Once we finish
+                        looping over all of the cells, we will divide the total velocity for each cell by the total weighted distance. Below is a simple 
+                        diagram of a bilinear interpolation from a particle to the cell coordinates near to it.
+                        <img src="images/diagrams/BilinearInterp.png" class="center">
+                        In order to find the cell a particle occupies, we will take its position and divide it by the height/width of a cell, which is determined when 
+                        we initialize our grid. So for a particle at (x, y):
+                        $$x_{cell} = {\lfloor {x \above 1pt cell width} \rfloor}, y_{cell} = {\lfloor {y \above 1pt cell height} \rfloor}$$
+                        However, since we are weighting this addition based on the distance from the cell velocity, we need to note the physical location of a cell's velocity. 
+                        Consider the scheme used for storing a cell's velocity below:
+                        <img src="images/diagrams/xd.png" class="center">
+                        However, we want our velocities to be positionally located at the cell faces like so:
+                        <img src="images/diagrams/offset.png" class="centerwide">
+                        So the x velocity for cell (i,j) is positionally located at (i, j + 0.5*height), and the y velocity is positionally located at 
+                        (i + 0.5 * width, j). So therefore, when we are trasferring a particles velocities to nearby cells, we need to account for this offset. When trasferring the 
+                        x velocity of a particle, before we find the cell it occupies, we will offset its y value by -0.5 * cell_height, and when trasferring the y component, we will 
+                        offset the x by -0.5 * cell_width. This has the side effect of requiring one extra row/column of the grid, but these correspond to cells outside of our grid, so 
+                        we can simply ignore them after the transfer.
+                        <br>
+                        <br>
+                        This transfer is very straight forward to implement iterativly, but in parallel we need to consider any race conditions that can occur. Like what happens if two 
+                        particles are imbuing their velocities to the same cell components? In this case, we need to make sure we have memory safe adds. Luckily, we can use the existing 
+                        <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.interlocked.add?view=net-7.0">Interlocked.Add</a> method for memory safe adds. However, 
+                        we want floating point precision for our simulation, but this function only support memory safe adds for integer types. We can work around this by multiplying our 
+                        velocities by a large number (like 100,000) and then converting all of our velocities to ints and adding them. Then when we have transferred all of our particle velocities 
+                        to cells, we can divide the result by the same number we scaled it by originally. This loses some precision, but in practice the simulation still worked.
+                    <h6><i><br>Solve for incompressibility</i></h6>
+                        I've mentioned it before, but in order to make the fluid seem like a fluid, we need to make sure that the total flow into a cell is the same as the total flow out of a cell.
+                        From the diagram above, we can see that for some cell (i,j), the flow into a cell in the x and y direction is simply stored at the (i,j) index in our cell velocity buffer.
+                        Then, the flow out of this cell in the x direction is stored in the cell to the right, (i+1,j), and the flow out of the cell in the y direction is stored in the cell above, (i,j+1).
+                        We can compute the divergence, which is the total outflow from the cell as follows:
+                        $${divergence = xvelocity(i+1,j) - xvelocity(i,j) + yvelocity(i,j+1) - yvelocity(i,j)}$$
+                        Intuitively, if there is a positive divergence, there is too much outflow, and if it is negative there is too much inflow. Ideally, we want the divergence for all cells to be 0. To make 
+                        the divergence 0, we modify each of the velocities by the same amount:
+                        $${divergence \above 1pt 4}$$
+                        So we will add this amount to the inflow values,  xvelocity(i,j) and yvelocity(i,j), and subtract it from the outflow values, xvelocity(i+1,j), yvelocity(i,j+1). However, if the current cell 
+                        is next to a wall, or other solid cell, we will NOT add any changes for the value that is adjacent to this wall, and only divide by the number of neighboring non solid cells when calculating this 
+                        update rather 4.
+                        <br>
+                        We can solve this for all our cells by iterating over all fluid cells and performing these calculations for every one for a number of steps until convergence (though I just chose 100-1000 interations in practice). 
+                        However, notice that this would be an iterative method, and our code is meant to be in parallel. I solved this by creating a new buffer, adding all of these updates for the cells to this buffer, and 
+                        at the end of every iteration of my loop, add these values back to the grid and then perform the next loop. I used the same float to uint conversion as noted above. This probably isn't correct? But it worked 
+                        in practice so I'm happy with it.
+                        <br>
+                        These implementation details are also all very informal - so I apologize, please look at my code or the references below for much better explanations.
+
+
+                    <h6><i><br>Transfer back to particles</i></h6>
+                        This is very similar to the step for going from particles to the grid. We will loop over every particle in parllel and find the cell it occupies using the same 
+                        offset method we discussed above. We will again use bilinear/trilinear interpolation to find the nearest neighbors and then do a weighted sum of the velocity values 
+                        for each cardinal direction and adjust the particle velocity by them. Note, that if a neighboring cell has no velocity, or is a solid cell, do not consider it in the 
+                        weighted sum. Then, we need to consider how we want to add these velocites back to the particles. If we simply set the particle velocity to the weighted sum of the 
+                        cell velocities near it, then a lot of the variation in velocity that particles have will be lost. So any particles that are in the same general area will all behave 
+                        about the same and the fluid will end up looking viscous. This is actually called the Particle-In-Cell (PIC) method and it looks like this:
+                        <br>
+                        <br>
+                        <video autoplay muted playsinline loop style="width:100%">
+                            <source src="images/FluidSimImgs/PIC.mp4" type="video/mp4">
+                        </video>
+                        <br>
+                        <br>
+                        If we instead choose to add the DIFFERENCE between the previous cell velocities and the new velocities to our particle velocities, we can preserve a lot more variance in the simulation. This 
+                        is what FLIP is and it looks like this:
+                        <br>
+                        <br>
+                        <video autoplay muted playsinline loop style="width:100%">
+                            <source src="images/FluidSimImgs/FLIP.mp4" type="video/mp4">
+                        </video>
+                        <br>
+                        <br>
+                        It's a lot more noisy. We can actually combine these two methods for much better results. We can set the new velocity of our particles to a fraction of the PIC calculated 
+                        velocity plus a fraction of the FLIP calculated velocity. In practice, it is chosen to use a FLIP fraction of about .9 and a PIC fraction of about .1. This combined method
+                        is usually referred to as PIC/FLIP and looks like this:
+                        <br>
+                        <br>
+                        <video autoplay muted playsinline loop style="width:100%">
+                            <source src="images/FluidSimImgs/PICFLIP.mp4" type="video/mp4">
+                        </video>
+                        <br>
+                        <br>
+            </p>
+            <p>
+                <h5><b>Rendering</b></h5>
+                    The rendering implementation is a lot more code heavy, so I will mostly just refer to the code I used for these parts.
+
+                    <h6><i><br>GPU instancing</i></h6>
+                        I made use of Unity's built in Graphics function, <a hraf="https://docs.unity3d.com/ScriptReference/Graphics.DrawMeshInstancedIndirect.html">DrawMeshInstancedIndirect</a>
+                        to draw the particles on each step. I have a function in my compute shader which sets up the argsbuffer for this draw call. It will iterate over 
+                        every single particle and update a different buffer filled with the properties for each particles rendering information. Specifically, it will 
+                        update a transform matrix for each particle as well as a color based off of the density of the cell the particle occupies.
+                    Instanced indirect
+                    <h6><i><br>Bringing the simulation to VR</i></h6>
+                        When I first ran my code on my headset, I only rendered the scene onto one eye. Well, it rendered the scene to both eyes, but only the left 
+                        eye got to see the particles. This is because the instanced shader I implemented did not have support for Single-pass instanced rendering which
+                        is how you can support stereo rendering for VR. I can't really explain this part, so please refer to <a href="https://docs.unity3d.com/Manual/SinglePassInstancing.html">
+                            this documentation.</a>
+                    <h6><i><br>Screen Space Fluid Rendering</i></h6>
+                        I failed to get screen space fluid rendering working for this project. The idea behind it is to recreate the fluid's surface in screen space 
+                        and apply some shaders to make it look like water. There is as lot more detail in <a href="https://developer.download.nvidia.com/presentations/2010/gdc/Direct3D_Effects.pdf">presentation</a>. 
+            </p>
+        </div>
+        
+        <!-- Evaluation of Results
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="analysis">
+
+            <h6 class="docs-header">Evaluation of Results</h6>
+            <p>
+                This wasn't the most quantitative project out there. When I start a simulation, I will instantiate all my particles in a square or something similar. So for 
+                most of my testing, I did a "Dam Break" simulation where I would instantiate all of my particles in a large block on one side of the sim and let them crash 
+                into the other side. Here's an example of a Dam Break with 175k particles on a (20,10,10) grid running at about 45 fps:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/fast.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                And adding the alpha blending doesn't seem to reduce any performance:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/FastBlend.mp4" type="video/mp4">
+                </video>
+
+
+
+                <br>
+                <br>
+                Here's an example of the sim running 625k particles at around 12.5 fps:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/slow.mp4" type="video/mp4">
+                </video>
+                <br>
+                I think this looks amazing, but it just isn't possible to have real time interaction with a sim this large.
+                <br>
+                <br>
+                Running the simulation in VR was a lot slower. I think this is due to the stereo shader? It had to render twice the particles, one for each eye, but I 
+                felt like this should be faster. I could run a sim of size (10,5,5) with 100k particles at around 30-40 fps.
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/VRfast.mp4" type="video/mp4">
+                </video>
+                <br> 
+                <br>
+                The sim above still very response and fast to interact with, the freezing of the "hand" is due to the lower battery life of the controller at 
+                the time of recording. If I try to render a similar sized sim to the one without VR, it will run at about 15 fps which is just not possible to have in VR:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/vrslow.mp4" type="video/mp4">
+                </video>
+                <br> 
+                <br>
+                And while it doesn't show up here, on the headset, there is terrible blending and warping of the images, which I imagine is due to the very slow fps.
+
+                <br>
+                <br>
+                In non VR mode, I also tested other starting configurations. The different starting positions did nothing for impact performance, but 
+                they look really cool so I'll add them here. Like a Double Dam Break:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/DoubleDam.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                A falling situation, not sure what to call this lol
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/Falling.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                This one actually highlights a bug in my implementation. Notice how the water tends towards the z = 0 axis as it falls. 
+                I'm not sure why, by my simulation likes to tend things towards z = 0 ever so slightly. I am not sure why, and it's hard to 
+                tell in other examples, but it really pained me for a while when I tried to fix but for time constraints, I left it in since
+                it still looks cool.
+                <br>
+                <br>
+                There were other issues too. I constantly had to tweak the resting pressure of the simulation or else 
+                it would just break. For example, if I left the pressure too low the following would occur:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/LowPressure.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                Or if it was too high:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/HighPressuire.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                Or if I did not include any damping when I imbued cell velocities to particles:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/explode.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                This is what most of my simulations looked like for a while - I did not figure out to add damping for so long.
+                <br>
+                <br>
+                And the most nefarious bug was this line of separation that exists near the y = 0 axis:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/bottom line.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                This actually occurs on both the x = z = 0 axis as well, but it only appears here because gravity forces the particles to the y = 0 one.
+                I think this is due to the face that neighboring cells are the right, upper, or "deeper" cells, so when solving for incompressibility, the bottom 
+                cells dont have a neighbor from below to push them up? So they just want to lay on the bottom... I don't know, other FLIP solvers manually separate particles,
+                but implementing this separation in parallel is a bit above my skill level and time so I left it!
+                <br>
+                <br>
+                There also is one elusive bug where the entire sim will bounce up like its jumping for joy. I couldn't record it, but I think it's due to the fact that 
+                my delta time for each simulation step is based off of the delta time in unity, and potentially something causes there to be a large spike between frames. Maybe my computer 
+                is processing something else at that exact time which causes the delta time to spike which causes everything to jump? Unsure, but it rarely bothered me.
+                <br>
+                <br>
+                Finally, I attempted to make screen space fluid rendering work, but it was so hard due to Unity's weirdly confusing rendering pipeline. I had little experience with shaders 
+                and implementing this turned out to be a bit too much in too little time. I don't have any decent results - the furthest I got before tapping out was implementing a gaussian 
+                blur on a render texture of the particle normals:
+                <br>
+                <br>
+                <video autoplay muted playsinline loop style="width:100%">
+                    <source src="images/FluidSimImgs/blurfail2.mp4" type="video/mp4">
+                </video>
+                <br>
+                <br>
+                My setup was very scuffed - I had a camera rendering a render texture of the simulation with normals attached to the spheres. Then ANOTHER camera pointing at the render texture 
+                which was applying a blur. I would have kept going by implementing a bilateral blur, but I needed to get the depth texture of the image - for some reason, I couldn't grab this 
+                in a render texture in Unity. I'm sure there's a single line of code I was missing, but for the life of me I couldn't find it. So for the sake of my sanity and hairline, I chose
+                not to continue.
+            </p>
+            
+        </div>
+        
+        <!-- Evaluation of Results
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <!-- <div class="docs-section" id="discussion">
+
+            <h6 class="docs-header">Discussion of Benefits and Limitations</h6>
+            <p>This section may end up being combined with the evaluation and future work sections. 
+                The goal is to outline key benefits and limitations. Ideally, you'd link this back to the fundamental details of your approach 
+                in the method section. But, some of these limitations may result from your implementation itself. Try to make conclusions about 
+                your approach and why it might have advantages and disadvantages.</p>
+
+            <p>
+                Benefits - very fast in unity, made vr extremely easy - my method was very easy to parallelize - maybe a grid based method would be harder, and particle based easier - mem safe adds and all
+
+                limitations - SSFR was fucked - the overhead and decitions of unity are too hard to learn so soon 
+            </p>
+            
+        </div>
+         -->
+         <!-- Future Work
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="future">
+
+            <h6 class="docs-header">Future Work</h6>
+            <p>
+                I really did not do anything ground breaking with this project. I implemented someone else's math in Unity's defined rendering 
+                pipeline - so I don't feel I have any ground to comment on future work for the field of fluid simulations. HOWEVER, I do have quite a bit of future
+                work for this sim in particular. I need to address the bugs I listed above before I would be comfortable calling this project done. I left them 
+                in for the sake of time for this report, but all of them take away from the visual pleasure of my simulation. I also want to add some more 
+                complicated environments. Right now the fluid simulation takes place in a simple fish tank, but it would be cool to see this water 
+                navigate a maze or some other object. More methods of interaction in VR would make the simulation a lot more novel. One feature I am adding now 
+                but will not make it in the report is the ability to rotate the tank. So when the user picks up and rotates the tank, gravity will effectively change 
+                and the particles will fall to a new direction. And of course, I really wanted to add screen space fluid rendering to make the simulation look more like 
+                actual water - this is my biggest todo.
+            </p>
+        </div>
+        
+        <!-- Conclusion
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="conclusion">
+
+            <h6 class="docs-header">Conclusion</h6>
+                <p>
+                    I had a lot of fun with this project. The purpose of this project wasn't to invent anything new, but to learn about fluid 
+                    simulations and implement one in Unity. I feel like I accomplished that. In the future, I really want to work more with 
+                    physics simulations and VFX in general since they're just so darn cool to look at. I think that these cool effects would be 
+                    valuable in the VR space - the medium of VR/AR makes experiencing these effects a lot cooler. I really don't know what to type here.
+                </p>
+            
+        </div>
+        
+        <!-- Acknowledgments
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="acknowledgments">
+
+            <h6 class="docs-header">Acknowledgments</h6>            
+            <p>
+                I could NOT have done this project without the help of some industry members:
+                <ul>
+                    <li>David Li implemented an amazing fluid simulation <a href="http://david.li/fluid/">here</a>. I reached out via email and he was 
+                    extremely helpful by giving me a lot of high level understanding and resources on how fluid sims work.</li>
+                    <li>Olivier Mercier helped me attempt to implement the screen space fluid rendering for the last part of this project. While I 
+                        did not succeed, Olivier was extremely helpful and nice.</li>
+                    <li>Douglas Lanman was my teacher for this course and was extremely supportive throughout this project. He helped me first 
+                        decide what I was even going to do and also helped me brainstorm quite a bit.
+                    </li>       
+                    <li>
+                        John Akers was like an assitant teacher for the course? Idk. He helped so much with setting up VR for this project, and 
+                        was the main person I would bounce ideas off of.
+                    </li>
+                </ul>
+                Again, thank you to everyone who helped, even if you're not listed here.
+            </p>
+        </div>
+        
+        <!-- Refernces
+        –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+
+        <div class="docs-section" id="references">
+
+            <h6 class="docs-header">References</h6>
+            <p>
+                My sources in no particular order. I know for a real report you need to cite them throughout the report and whatnot - but I got 
+                really lazy sorry :P.
+                <ul>
+                    <li>
+                        Yongning Zhu and Robert Bridson. 2005. Animating sand as a fluid. ACM Trans. Graph. 24, 3 (July 2005), 
+965–972. https://doi.org/10.1145/1073204.1073298
+                    </li>
+                    <li>Spencer, M. 2023. How to render 13,086,178 objects at 120 fps, YouTube. Available at: https://www.youtube.com/watch?v=6mNj3M1il_c
+                    </li>
+                    <li>Matthias Müller. 2022. 18 - how to write a flip water / fluid simulation running in your browser. 
+                    </li>
+                    <li>Simon Green. 2009. Screen Space Fluid
+                        Rendering for Games. Availible at https://developer.download.nvidia.com/presentations/2010/gdc/Direct3D_Effects.pdf
+                    </li>
+                    <li> David Li. 2016. http://david.li/fluid</li>
+                    <li>
+                        Robert Bridson. 2008. Fluid Simulation for Computer Graphics second edition.
+                    </li>
+                    <li>
+                        Matthias Müller and Miles Macklin. 2013. Position based fluids. ACM Transactions on Graphics Volume 32 Issue 4.
+                    </li>
+                </ul>
+            </p>
+            
+        </div>
+            
+           
+    <!-- End Document
+    –––––––––––––––––––––––––––––––––––––––––––––––––– -->
+        
+    </div>
+
+</body></html>

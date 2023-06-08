@@ -654,13 +654,13 @@ MonoBehaviour:
   fluidCellPrefab: {fileID: 6691955925574645823, guid: 78cc2e52aa74ded46802d9cf87e6b736, type: 3}
   bottomPlane: {fileID: 731522172}
   showGrid: 0
-  _solveIterations: 600
-  _partcileRadius: 3
-  _timeScale: 1.75
-  _restDensityMult: 3.5
+  _solveIterations: 100
+  _partcileRadius: 1.5
+  _timeScale: 1.3
+  _restDensityMult: 88
   _baseParticleColor: {r: 0, g: 0, b: 0, a: 0}
   _fastParticleColor: {r: 0, g: 0, b: 0, a: 0}
-  _gridCellDensity: 3
+  _gridCellDensity: 4
   _simWidth: 20
   _simHeight: 10
   _simDepth: 10

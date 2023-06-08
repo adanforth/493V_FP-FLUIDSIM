@@ -191,6 +191,7 @@ public class Simulator_VR : MonoBehaviour
         int numY = (int)math.floor((relativeWaterHeight * _simHeight - 2.0f * h - 2.0f * _r) / dy);
         int numZ = (int)math.floor((_simDepth - 2 * h) / dz);
         _numParticles = numX * numY * numZ;
+        Debug.Log(_numParticles);
 
         //Debug.Log(_numParticles);
         _fNumX = (int)math.floor(_simWidth / h) + 1;

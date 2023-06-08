@@ -216,13 +216,13 @@ public class Simulator_3D : MonoBehaviour
             {
                 for (int k = 0; k < numZ; k++)
                 {
-                    if (i < numX / 2)
-                    {
-                        _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
-                    } else
-                    {
-                        _initParticlePositions[pInd].x = .71f * _simWidth + _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
-                    }
+                    //if (i < numX / 2)
+                    //{
+                    //    _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
+                    //} else
+                    //{
+                    //    _initParticlePositions[pInd].x = .71f * _simWidth + _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
+                    //}
                     _initParticlePositions[pInd].x = _h + _r + dx * i + (j % 2 == 0 ? 0.0f : _r) + (k % 2 == 0 ? 0.0f : _r);
                     _initParticlePositions[pInd].y = (_h + _r + dy * j) + (k % 2 == 0 ? 0.0f : _r);
                     //_initParticlePositions[pInd].y = _simHeight * .35f + (_h + _r + dy * j) + (k % 2 == 0 ? 0.0f : _r);
